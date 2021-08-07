@@ -1,0 +1,11 @@
+# You can use this file to create a conda environment for this pipeline:
+#   conda env create -f environment.yml
+name: nf-germline-snv-1.0
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - bioconda::fastqc=0.11.9
+  - bioconda::flexbar=3.5.0
+  - bioconda::multiqc=1.11
