@@ -35,4 +35,4 @@ jobs:
           ACCESSKEY: ${{secrets.ACCESSKEY}}
           SECRETKEY: ${{secrets.SECRETKEY}}
         run: |
-          nextflow run ${GITHUB_WORKSPACE} -profile test2,yandex --accessKey ${ACCESSKEY} --secretKey ${SECRETKEY}
+          nextflow run ${GITHUB_WORKSPACE} -profile test2,yandex --accessKey $ACCESSKEY --secretKey $SECRETKEY
