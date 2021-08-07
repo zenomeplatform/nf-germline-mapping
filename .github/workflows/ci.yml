@@ -31,5 +31,8 @@ jobs:
           wget -qO- get.nextflow.io | bash
           sudo mv nextflow /usr/local/bin/
       - name: Basic workflow test with public test data
+        env:
+          ACCESSKEY: ${{secrets.ACCESSKEY}}
+          SECRETKEY: ${{secrets.SECRETKEY}}
         run: |
-          nextflow run ${GITHUB_WORKSPACE} -profile test2,yandex --accessKey ${{secrets.ACCESSKEY}} --secretKey ${{secrets.SECRETKEY}}
+          nextflow run ${GITHUB_WORKSPACE} -profile test2,yandex --accessKey ${ACCESSKEY} --secretKey ${SECRETKEY}
