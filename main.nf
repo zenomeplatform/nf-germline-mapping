@@ -229,8 +229,8 @@ process trim_fastqc {
 
     output:
     set val(sample_name),
-        file("${fastq_1.simpleName}_trimmed.fastq.gz"),
-        file("${fastq_2.simpleName}_trimmed.fastq.gz"),
+        file("${fastq_1.simpleName}_trim.fastq.gz"),
+        file("${fastq_2.simpleName}_trim.fastq.gz"),
         val(seq_type),
         val(seq_machine),
         val(flowcell_id),
@@ -251,8 +251,8 @@ process trim_fastqc {
         --zip-output GZ \
         --reads ${fastq_1} \
         --reads2 ${fastq_2} \
-        --output-reads ${fastq_1.simpleName}_trimmed.fastq \
-        --output-reads2 ${fastq_2.simpleName}_trimmed.fastq \
+        --output-reads ${fastq_1.simpleName}_trim.fastq \
+        --output-reads2 ${fastq_2.simpleName}_trim.fastq \
         --output-log flexbar_${sample_name}.log \
         $adapters_param
 
