@@ -320,7 +320,7 @@ process multiqc_prealignment_report_all {
     publishDir "${params.outdir}/multiqc_prealignment_report/", mode: 'copy'
 
     input:
-    set val(sample_name), file(fastqc_raw_dir), file(trimming_log), file(fastqc_trimmed_dir) from ch_prealignment_multiqc_files_all.collect()
+    file("*") from ch_prealignment_multiqc_files_all.collect()
 
     output:
     file("multiqc_report.html")
