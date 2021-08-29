@@ -292,16 +292,35 @@ process fastqc_trimmed {
   }
 
 
-ch_prealignment_multiqc_files = ch_fastq_qc_raw
-                    .join(ch_trimming_report, by: 0)
-                    .join(ch_fastq_qc_trimmed, by: 0)
+ch_fastq_qc_raw
+    .join(ch_trimming_report, by: 0)
+    .join(ch_fastq_qc_trimmed, by: 0)
+    .into { ch_prealignment_multiqc_files_by_sample; ch_prealignment_multiqc_files_all }
 
-process multiqc_prealignment_report {
+
+process multiqc_prealignment_report_by_sample {
+    label 'low_memory'
+    publishDir "${params.outdir}/multiqc_prealignment_report/${sample_name}/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(fastqc_raw_dir), file(trimming_log), file(fastqc_trimmed_dir) from ch_prealignment_multiqc_files_by_sample
+
+    output:
+    file("multiqc_report.html")
+
+    script:
+    """
+    multiqc .
+    """
+  }
+
+
+process multiqc_prealignment_report_all {
     label 'low_memory'
     publishDir "${params.outdir}/multiqc_prealignment_report/", mode: 'copy'
 
     input:
-    set val(sample_name), file(fastqc_raw_dir), file(trimming_log), file(fastqc_trimmed_dir) from ch_prealignment_multiqc_files.collect()
+    set val(sample_name), file(fastqc_raw_dir), file(trimming_log), file(fastqc_trimmed_dir) from ch_prealignment_multiqc_files_all.collect()
 
     output:
     file("multiqc_report.html")
