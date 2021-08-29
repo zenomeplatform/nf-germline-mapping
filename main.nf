@@ -136,7 +136,7 @@ Channel
           sample_name_parsed = file(fastq_path_1).simpleName.split(params.sample_name_format_delimeter)
 
           if (sample_name_parsed.length != params.sample_name_expected_item_number) {
-            exit 1, "Error when parsing fastq file name. Each file name must have the following format: \n${params.sample_name_format}. \nExample         : ${params.sample_name_format_example} \nFailed file name: ${file(fastq_path_1).getName()} \n\nPlease follow the fastq file naming format, because pipeline extracts sample metadata (seq-type, seq-machine, flowcell-ID, lane, and barcode) from the file name. \nYou can disable infering metadata from file name with parameter: \n--metadata_from_file_name false \nIn this case seq-type and seq-machine will be left blank, and all samples will be processed as completely indepentdent samples."
+            exit 1, "Error when parsing fastq file name. Each file name must have the following format: \n${params.sample_name_format}. \nExample         : ${params.sample_name_format_example} \nFailed file name: ${file(fastq_path_1).getName()} \n\nPlease follow the fastq file naming format, because pipeline extracts sample metadata (bio-type, seq-type, seq-machine, flowcell-ID, lane, and barcode) from the file name. \nYou can disable infering metadata from file name with parameter: \n--metadata_from_file_name false \nIn this case bio-type, seq-type and seq-machine will be left blank, and all samples will be processed as completely indepentdent samples."
           }
 
           if (params.double_check_sample_id) {
@@ -146,14 +146,16 @@ Channel
             }
           }
 
-          seq_type    = sample_name_parsed[1]
-          seq_machine = sample_name_parsed[2]
-          flowcell_id = sample_name_parsed[3]
-          lane        = sample_name_parsed[4]
-          barcode     = sample_name_parsed[5]
+          bio_type    = sample_name_parsed[1]
+          seq_type    = sample_name_parsed[2]
+          seq_machine = sample_name_parsed[3]
+          flowcell_id = sample_name_parsed[4]
+          lane        = sample_name_parsed[5]
+          barcode     = sample_name_parsed[6]
       }
 
       if (!params.metadata_from_file_name) {
+          bio_type    = "not_provided"
           seq_type    = "not_provided"
           seq_machine = "not_provided"
           flowcell_id = sample_name
@@ -161,7 +163,7 @@ Channel
           barcode     = sample_name
       }
 
-      [ sample_name, file(fastq_path_1), file(fastq_path_2), seq_type, seq_machine, flowcell_id, lane, barcode ]
+      [ sample_name, file(fastq_path_1), file(fastq_path_2), bio_type, seq_type, seq_machine, flowcell_id, lane, barcode ]
     }
     .set { ch_input_fastq }
 
@@ -188,6 +190,7 @@ process fastqc_raw {
     set val(sample_name),
         file(fastq_1),
         file(fastq_2),
+        val(bio_type),
         val(seq_type),
         val(seq_machine),
         val(flowcell_id),
@@ -220,6 +223,7 @@ process trim_fastqc {
     set val(sample_name),
         file(fastq_1),
         file(fastq_2),
+        val(bio_type),
         val(seq_type),
         val(seq_machine),
         val(flowcell_id),
@@ -231,6 +235,7 @@ process trim_fastqc {
     set val(sample_name),
         file("${fastq_1.simpleName}_trim.fastq.gz"),
         file("${fastq_2.simpleName}_trim.fastq.gz"),
+        val(bio_type),
         val(seq_type),
         val(seq_machine),
         val(flowcell_id),
@@ -270,6 +275,7 @@ process fastqc_trimmed {
     set val(sample_name),
         file(fastq_1),
         file(fastq_2),
+        val(bio_type),
         val(seq_type),
         val(seq_machine),
         val(flowcell_id),
