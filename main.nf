@@ -299,6 +299,7 @@ ch_fastq_qc_raw
 
 
 process multiqc_prealignment_report_by_sample {
+    tag "$sample_name"
     label 'low_memory'
     publishDir "${params.outdir}/multiqc_prealignment_report/${sample_name}/", mode: 'copy'
 
