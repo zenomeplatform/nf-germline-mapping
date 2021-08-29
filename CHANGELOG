@@ -2,3 +2,17 @@
 
 PR centric changelog with description of notable changes implemented in a PR.
 
+
+### v0.1 - 29/02/2021 - Adds first pipeline template and 4 steps
+####  Added:
+    - the basic piplene infrastrucure with multiple auxiliary elements;
+    - reading input from input csv file with sample name and paths to fastq files;
+    - first 4 pipeline steps:
+        1. initial fastqc on raw data,
+        2. read quality filtering and trimming with flexbar,
+        3. secondary fastqc,
+        4. collective multiqc;
+    - test profiles:
+        1. with public tiny s3 data,
+        2. with private tiny s3 data;
+    - two ci tests for the above.
