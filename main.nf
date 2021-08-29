@@ -195,7 +195,7 @@ process fastqc_raw {
         val(barcode) from ch_input_fastq_for_qc
 
     output:
-    file("fastqc_${sample_name}_raw_logs") into ch_fastq_qc_raw
+    set val(sample_name), file("fastqc_${sample_name}_raw_logs") into ch_fastq_qc_raw
 
 
     script:
@@ -236,7 +236,7 @@ process trim_fastqc {
         val(flowcell_id),
         val(lane),
         val(barcode) into (ch_fastq_trimmed_to_map, ch_fastq_trimmed_for_qc)
-    file("flexbar_${sample_name}.log") into ch_trimming_report
+    set val(sample_name), file("flexbar_${sample_name}.log") into ch_trimming_report
 
     script:
     // adapters were not provide so for now are optional
@@ -277,7 +277,7 @@ process fastqc_trimmed {
         val(barcode) from ch_fastq_trimmed_for_qc
 
     output:
-    file("fastqc_${sample_name}_trimmed_logs") into ch_fastq_qc_trimmed
+    set val(sample_name), file("fastqc_${sample_name}_trimmed_logs") into ch_fastq_qc_trimmed
 
     script:
     """
@@ -292,14 +292,16 @@ process fastqc_trimmed {
   }
 
 
+ch_prealignment_multiqc_files = ch_fastq_qc_raw
+                    .join(ch_trimming_report, by: 0)
+                    .join(ch_fastq_qc_trimmed, by: 0)
+
 process multiqc_prealignment_report {
     label 'low_memory'
     publishDir "${params.outdir}/multiqc_prealignment_report/", mode: 'copy'
 
     input:
-    file(fastqc_raw_dir) from ch_fastq_qc_raw.collect()
-    file(trimming_log) from ch_trimming_report.collect()
-    file(fastqc_trimmed_dir) from ch_fastq_qc_trimmed.collect()
+    set val(sample_name), file(fastqc_raw_dir), file(trimming_log), file(fastqc_trimmed_dir) from ch_prealignment_multiqc_files.collect()
 
     output:
     file("multiqc_report.html")
