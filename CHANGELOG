@@ -3,8 +3,8 @@
 PR centric changelog with description of notable changes implemented in a PR.
 
 
-### v0.1 - 29/02/2021 - Adds first pipeline template and 4 steps
-####  Added:
+v0.1 - 29/02/2021 - Adds first pipeline template and 4 steps
+  Added:
     - the basic piplene infrastrucure with multiple auxiliary elements;
     - reading input from input csv file with sample name and paths to fastq files;
     - first 4 pipeline steps:
