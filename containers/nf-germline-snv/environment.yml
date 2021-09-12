@@ -9,3 +9,5 @@ dependencies:
   - bioconda::fastqc=0.11.9
   - bioconda::flexbar=3.5.0
   - bioconda::multiqc=1.11
+  - bioconda::bwa=0.7.17
+  - bioconda::samtools=1.13
