@@ -130,7 +130,41 @@ Channel
     .fromPath(params.input)
     .ifEmpty { exit 1, "Cannot find input file : ${params.input}" }
     .splitCsv(skip:1)
-    .map {sample_name, fastq_path_1, fastq_path_2  -> [ sample_name, file(fastq_path_1), file(fastq_path_2) ] }
+    .map {sample_name, fastq_path_1, fastq_path_2  ->
+
+      if (params.metadata_from_file_name) {
+          sample_name_parsed = file(fastq_path_1).simpleName.split(params.sample_name_format_delimeter)
+
+          if (sample_name_parsed.length != params.sample_name_expected_item_number) {
+            exit 1, "Error when parsing fastq file name. Each file name must have the following format: \n${params.sample_name_format}. \nExample         : ${params.sample_name_format_example} \nFailed file name: ${file(fastq_path_1).getName()} \n\nPlease follow the fastq file naming format, because pipeline extracts sample metadata (bio-type, seq-type, seq-machine, flowcell-ID, lane, and barcode) from the file name. \nYou can disable infering metadata from file name with parameter: \n--metadata_from_file_name false \nIn this case bio-type, seq-type and seq-machine will be left blank, and all samples will be processed as completely indepentdent samples."
+          }
+
+          if (params.double_check_sample_id) {
+            sample_name_from_file_name = sample_name_parsed[0]
+            if (sample_name != sample_name_from_file_name) {
+              exit 1, "Error: sample name mismatch. \nSample name defined in input csv file sample_id column for file ${file(fastq_path_1).getName()} does not match the one specified in the file name. \nFrom sample_id column: ${sample_name} \nFrom file name       : ${sample_name_from_file_name} \n\nPlease provide correct sample and file name, or disable the sample name checking with parameter: \n--double_check_sample_id false"
+            }
+          }
+
+          bio_type    = sample_name_parsed[1]
+          seq_type    = sample_name_parsed[2]
+          seq_machine = sample_name_parsed[3]
+          flowcell_id = sample_name_parsed[4]
+          lane        = sample_name_parsed[5]
+          barcode     = sample_name_parsed[6]
+      }
+
+      if (!params.metadata_from_file_name) {
+          bio_type    = "not_provided"
+          seq_type    = "not_provided"
+          seq_machine = "not_provided"
+          flowcell_id = sample_name
+          lane        = sample_name
+          barcode     = sample_name
+      }
+
+      [ sample_name, file(fastq_path_1), file(fastq_path_2), bio_type, seq_type, seq_machine, flowcell_id, lane, barcode ]
+    }
     .set { ch_input_fastq }
 
 ch_input_fastq.into {
@@ -153,10 +187,18 @@ process fastqc_raw {
     publishDir "${params.outdir}/fastqc/raw/", mode: 'copy'
 
     input:
-    set val(sample_name), file(fastq_1), file(fastq_2) from ch_input_fastq_for_qc
+    set val(sample_name),
+        file(fastq_1),
+        file(fastq_2),
+        val(bio_type),
+        val(seq_type),
+        val(seq_machine),
+        val(flowcell_id),
+        val(lane),
+        val(barcode) from ch_input_fastq_for_qc
 
     output:
-    file("fastqc_${sample_name}_raw_logs") into ch_fastq_qc_raw
+    set val(sample_name), file("fastqc_${sample_name}_raw_logs") into ch_fastq_qc_raw
 
 
     script:
@@ -178,12 +220,28 @@ process trim_fastqc {
     publishDir "${params.outdir}/trimmed_reads/", mode: 'copy'
 
     input:
-    set val(sample_name), file(fastq_1), file(fastq_2) from ch_input_fastq_to_trim
+    set val(sample_name),
+        file(fastq_1),
+        file(fastq_2),
+        val(bio_type),
+        val(seq_type),
+        val(seq_machine),
+        val(flowcell_id),
+        val(lane),
+        val(barcode) from ch_input_fastq_to_trim
     each file(adapters) from ch_adapters
 
     output:
-    set val(sample_name), file("${fastq_1.simpleName}_trimmed.fastq.gz"), file("${fastq_2.simpleName}_trimmed.fastq.gz") into (ch_fastq_trimmed_to_map, ch_fastq_trimmed_for_qc)
-    file("flexbar_${sample_name}.log") into ch_trimming_report
+    set val(sample_name),
+        file("${fastq_1.simpleName}_trim.fastq.gz"),
+        file("${fastq_2.simpleName}_trim.fastq.gz"),
+        val(bio_type),
+        val(seq_type),
+        val(seq_machine),
+        val(flowcell_id),
+        val(lane),
+        val(barcode) into (ch_fastq_trimmed_to_map, ch_fastq_trimmed_for_qc)
+    set val(sample_name), file("flexbar_${sample_name}.log") into ch_trimming_report
 
     script:
     // adapters were not provide so for now are optional
@@ -198,8 +256,8 @@ process trim_fastqc {
         --zip-output GZ \
         --reads ${fastq_1} \
         --reads2 ${fastq_2} \
-        --output-reads ${fastq_1.simpleName}_trimmed.fastq \
-        --output-reads2 ${fastq_2.simpleName}_trimmed.fastq \
+        --output-reads ${fastq_1.simpleName}_trim.fastq \
+        --output-reads2 ${fastq_2.simpleName}_trim.fastq \
         --output-log flexbar_${sample_name}.log \
         $adapters_param
 
@@ -214,10 +272,18 @@ process fastqc_trimmed {
     publishDir "${params.outdir}/fastqc/trimmed/", mode: 'copy'
 
     input:
-    set val(sample_name), file(fastq_1), file(fastq_2) from ch_fastq_trimmed_for_qc
+    set val(sample_name),
+        file(fastq_1),
+        file(fastq_2),
+        val(bio_type),
+        val(seq_type),
+        val(seq_machine),
+        val(flowcell_id),
+        val(lane),
+        val(barcode) from ch_fastq_trimmed_for_qc
 
     output:
-    file("fastqc_${sample_name}_trimmed_logs") into ch_fastq_qc_trimmed
+    set val(sample_name), file("fastqc_${sample_name}_trimmed_logs") into ch_fastq_qc_trimmed
 
     script:
     """
@@ -232,23 +298,49 @@ process fastqc_trimmed {
   }
 
 
-process multiqc_prealignment_report {
-    label 'low_memory'
-    publishDir "${params.outdir}/multiqc_prealignment_report/", mode: 'copy'
+ch_fastq_qc_raw
+    .join(ch_trimming_report, by: 0)
+    .join(ch_fastq_qc_trimmed, by: 0)
+    .into { ch_prealignment_multiqc_files_by_sample; ch_prealignment_multiqc_files_all }
 
-    input:
-    file(fastqc_raw_dir) from ch_fastq_qc_raw.collect()
-    file(trimming_log) from ch_trimming_report.collect()
-    file(fastqc_trimmed_dir) from ch_fastq_qc_trimmed.collect()
 
-    output:
-    file("multiqc_report.html")
+if (params.multiqc_prealignment_by_sample) {
+  process multiqc_prealignment_report_by_sample {
+      tag "$sample_name"
+      label 'low_memory'
+      publishDir "${params.outdir}/multiqc_prealignment_report/${sample_name}/", mode: 'copy'
 
-    script:
-    """
-    multiqc .
-    """
-  }
+      input:
+      set val(sample_name), file(fastqc_raw_dir), file(trimming_log), file(fastqc_trimmed_dir) from ch_prealignment_multiqc_files_by_sample
+
+      output:
+      file("multiqc_report.html")
+
+      script:
+      """
+      multiqc .
+      """
+    }
+}
+
+
+if (params.multiqc_prealignment_all) {
+  process multiqc_prealignment_report_all {
+      label 'low_memory'
+      publishDir "${params.outdir}/multiqc_prealignment_report/", mode: 'copy'
+
+      input:
+      file("*") from ch_prealignment_multiqc_files_all.collect()
+
+      output:
+      file("multiqc_report.html")
+
+      script:
+      """
+      multiqc .
+      """
+    }
+}
 
 
 
