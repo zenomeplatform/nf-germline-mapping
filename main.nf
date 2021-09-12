@@ -343,6 +343,40 @@ if (params.multiqc_prealignment_all) {
 }
 
 
+process map_reads {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/fastqc/trimmed/", mode: 'copy'
+
+    echo true
+
+    input:
+    set val(sample_name),
+        file(fastq_1),
+        file(fastq_2),
+        val(bio_type),
+        val(seq_type),
+        val(seq_machine),
+        val(flowcell_id),
+        val(lane),
+        val(barcode) from ch_fastq_trimmed_to_map
+    set file(refgenome), file(refgenome_index) from ch_refgenome
+    //output:
+
+    script:
+    """
+    echo Process started
+
+    #bwa mem -t ${task.cpus} \
+    #    -Y \
+    #    -R "@RG\tID:${seq_type_modified}\tPL:${seq-machine-modified}\tPU:v${flowcell_id}.${lane}.${barcode}\tLB:exome_lib${number_fq_pairs}\tSM:${sample_id}" \
+    #    ${refgenome} \
+    #    ${name}_trimmed.F.fq.gz \
+    #    ${name}_trimmed.R.fq.gz \
+    #  | samtools view -bS -@${task.cpus} - > ${dir}/${sample_id}/align/${sample_id}-${flow_id}-${cell_number}-${barcode}._L${cell_number}.bam;
+    """
+  }
+
 
 /*
  * Workflow completion
