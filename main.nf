@@ -13,6 +13,8 @@ def helpMessage() {
                                 SRA123456,path/to/SRA123456_1.fq.gz,path/to/SRA123456_2.fq.gz
                                 SRA345678,path/to/SRA345678_1.fq.gz,path/to/SRA345678_2.fq.gz
 
+    --genome                    Genome build version. Possible values: ${params.genomes.keySet().join(", ")}.
+
     Optional arguments:
     --adapters                  Fasta file contaning adapter sequences to be trimmed from the raw fastq files.
 
@@ -93,6 +95,9 @@ summary['Script dir']       = workflow.projectDir
 summary['User']             = workflow.userName
 summary['Config Profile']   = workflow.profile
 summary['Input file']       = params.input
+if (!params.fasta) summary['Genome build'] = params.genome
+if (params.fasta) summary['Reference genome'] = params.fasta
+if (params.fasta) summary['Reference genome index'] = params.fasta_fai
 if (params.adapters) summary['Adapters'] = params.adapters
 if (params.cleanup) summary['Cleanup'] = "Cleanup is turned on"
 
@@ -171,6 +176,12 @@ ch_input_fastq.into {
   ch_input_fastq_for_qc;
   ch_input_fastq_to_trim
 }
+
+refgenome = params.fasta ? params.fasta : params.genomes[params.genome].fasta
+refgenome_index = params.fasta ? params.fasta_fai : params.genomes[params.genome].fasta_fai
+
+ch_refgenome = Channel.value(file(refgenome))
+ch_refgenome_index = Channel.value(file(refgenome_index))
 
 // Optional inputs
 ch_adapters = params.adapters ? Channel.value(file(params.adapters)) : "null"
@@ -360,7 +371,8 @@ process map_reads {
         val(flowcell_id),
         val(lane),
         val(barcode) from ch_fastq_trimmed_to_map
-    set file(refgenome), file(refgenome_index) from ch_refgenome
+    file(refgenome) from ch_refgenome
+    file(refgenome_index) from ch_refgenome_index
     //output:
 
     script:
