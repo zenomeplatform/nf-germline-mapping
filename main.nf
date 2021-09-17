@@ -98,6 +98,7 @@ summary['Input file']       = params.input
 if (!params.fasta) summary['Genome build'] = params.genome
 if (params.fasta) summary['Reference genome'] = params.fasta
 if (params.fasta) summary['Reference genome index'] = params.fasta_fai
+if (params.bwa) summary['BWA index'] = params.bwa
 if (params.adapters) summary['Adapters'] = params.adapters
 if (params.cleanup) summary['Cleanup'] = "Cleanup is turned on"
 
@@ -124,7 +125,12 @@ if (workflow.profile.contains('yandex')) {
   if (!params.secretKey) {to_exit=true; log.error "Please provide yandex secretKey to be used for yandex s3 bucket access with --secretKey '<key>' argument. Single quotes are important."}
 }
 
-if (to_exit) exit 1, "One or more inputs are missing. Termingating pipeline."
+// Check if genome parameter has a correct value
+if (!params.genomes.keySet().contains(params.genome)) {
+  to_exit=true; log.error "Reference data for genome \"${params.genome}\" is not available. Please choose one of: ${params.genomes.keySet().join(", ")}."
+}
+
+if (to_exit) exit 1, "One or more inputs are missing. Aborting."
 
 
 /*
@@ -182,6 +188,9 @@ refgenome_index = params.fasta ? params.fasta_fai : params.genomes[params.genome
 
 ch_refgenome = Channel.value(file(refgenome))
 ch_refgenome_index = Channel.value(file(refgenome_index))
+
+bwa = params.bwa ? params.bwa : params.genomes[params.genome].bwa
+ch_bwa = Channel.fromFilePairs(bwa, size: 5, flat: true)
 
 // Optional inputs
 ch_adapters = params.adapters ? Channel.value(file(params.adapters)) : "null"
