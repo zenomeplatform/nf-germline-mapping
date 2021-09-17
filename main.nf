@@ -380,8 +380,7 @@ process map_reads {
         val(flowcell_id),
         val(lane),
         val(barcode) from ch_fastq_trimmed_to_map
-    file(refgenome) from ch_refgenome
-    file(refgenome_index) from ch_refgenome_index
+    file(bwa_indexes) from ch_bwa
     //output:
 
     script:
