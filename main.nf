@@ -168,7 +168,7 @@ Channel
       if (!params.metadata_from_file_name) {
           bio_type    = "not_provided"
           seq_type    = "not_provided"
-          seq_machine = "not_provided"
+          seq_machine = "IL"
           flowcell_id = sample_name
           lane        = sample_name
           barcode     = sample_name
@@ -366,9 +366,7 @@ if (params.multiqc_prealignment_all) {
 process map_reads {
     tag "$sample_name"
     label 'low_memory'
-    publishDir "${params.outdir}/fastqc/trimmed/", mode: 'copy'
-
-    echo true
+    publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
 
     input:
     set val(sample_name),
@@ -381,19 +379,30 @@ process map_reads {
         val(lane),
         val(barcode) from ch_fastq_trimmed_to_map
     file(bwa_indexes) from ch_bwa
-    //output:
+
+    output:
+    file("${fastq_1.simpleName}_L${number_fq_pairs}.bam") into ch_mapped_reads
 
     script:
-    """
-    echo Process started
+    seq_type_modified = sample_name[2]
 
-    #bwa mem -t ${task.cpus} \
-    #    -Y \
-    #    -R "@RG\tID:${seq_type_modified}\tPL:${seq-machine-modified}\tPU:v${flowcell_id}.${lane}.${barcode}\tLB:exome_lib${number_fq_pairs}\tSM:${sample_id}" \
-    #    ${refgenome} \
-    #    ${name}_trimmed.F.fq.gz \
-    #    ${name}_trimmed.R.fq.gz \
-    #  | samtools view -bS -@${task.cpus} - > ${dir}/${sample_id}/align/${sample_id}-${flow_id}-${cell_number}-${barcode}._L${cell_number}.bam;
+    if (params.seq_machine_catalog.keySet().contains(seq_machine)) {
+      seq_machine_modified = params.seq_machine_catalog[seq_machine].full_name
+    } else {
+      log.warn "Sample ${fastq_1.name} has unknown sequening machine type \"${seq_machine}\". \nKnow machines in catalog: ${params.seq_machine_catalog.keySet().join(", ")}. \nSample will receive \"Unknown_seq_machine\" value."
+      seq_machine_modified = "Unknown_seq_machine"
+    }
+
+    number_fq_pairs = 1 // TODO
+
+    """
+    bwa mem -t ${task.cpus} \
+        -Y \
+        -R "@RG\\tID:${seq_type_modified}\\tPL:${seq_machine_modified}\\tPU:v${flowcell_id}.${lane}.${barcode}\\tLB:exome_lib${number_fq_pairs}\\tSM:${sample_name}" \
+        ${bwa_indexes[1].baseName} \
+        ${fastq_1} \
+        ${fastq_2} \
+      | samtools view -bS -@${task.cpus} - > ${fastq_1.simpleName}_L${number_fq_pairs}.bam;
     """
   }
 
