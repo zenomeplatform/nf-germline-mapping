@@ -433,7 +433,7 @@ process merge_bams_by_sample {
 }
 
 
-process sort_bams {
+process sort_bams_by_name {
     tag "$sample_name"
     label 'low_memory'
     publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
@@ -442,7 +442,7 @@ process sort_bams {
     set val(sample_name), file(merged_bam) from ch_mapped_reads_merged_by_sample
 
     output:
-    set val(sample_name), file("${sample_name}.namesorted.bam") into ch_mapped_reads_sorted
+    set val(sample_name), file("${sample_name}.namesorted.bam") into ch_mapped_reads_sorted_by_name
 
     script:
     """
@@ -460,7 +460,7 @@ process mark_duplicates  {
     publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
 
     input:
-    set val(sample_name), file(sorted_bam) from ch_mapped_reads_sorted
+    set val(sample_name), file(sorted_bam) from ch_mapped_reads_sorted_by_name
 
     output:
     set val(sample_name), file("${sample_name}.namesorted_mrkdup.bam") into ch_mapped_reads_mrkdup
