@@ -385,10 +385,10 @@ process map_reads {
         val(lane),
         val(barcode),
         val(read_group_LB) from ch_fastq_trimmed_to_map
-    file(bwa_indexes) from ch_bwa
+    each file(bwa_indexes) from ch_bwa
 
     output:
-    file("${fastq_1.simpleName}_L${read_group_LB}.bam") into ch_mapped_reads
+    set val(sample_name), file("${fastq_1.simpleName}_L${read_group_LB}.bam") into ch_mapped_reads
 
     script:
     seq_type_modified = sample_name[2]
@@ -408,6 +408,27 @@ process map_reads {
         ${fastq_1} \
         ${fastq_2} \
       | samtools view -bS -@${task.cpus} - > ${fastq_1.simpleName}_L${read_group_LB}.bam;
+    """
+}
+
+
+ch_mapped_reads_grouped_by_sample = ch_mapped_reads.groupTuple(by: 0).view()
+
+
+process merge_bams_by_sample {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam_files) from ch_mapped_reads_grouped_by_sample
+
+    output:
+    file("${sample_name}.merged.bam") into ch_mapped_reads_merged_by_sample
+
+    script:
+    """
+    samtools merge -@ ${task.cpus} ${sample_name}.merged.bam ${bam_files}
     """
 }
 
