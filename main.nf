@@ -480,6 +480,30 @@ process mark_duplicates  {
 }
 
 
+process sort_bams_by_coord  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam_mrkdupl) from ch_mapped_reads_mrkdup
+
+    output:
+    set val(sample_name), file("${sample_name}.sorted_mrkdup.bam"), file("${sample_name}.sorted_mrkdup.bai") into ch_mapped_reads_mrkdup_sorted
+
+    script:
+    """
+    picard SortSam \
+        I=${bam_mrkdupl} \
+        O=${sample_name}.sorted_mrkdup.bam \
+        SO=coordinate
+
+    picard BuildBamIndex \
+        I=${sample_name}.sorted_mrkdup.bam
+    """
+}
+
+
 /*
  * Workflow completion
  */
