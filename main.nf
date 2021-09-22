@@ -127,7 +127,7 @@ if (workflow.profile.contains('yandex')) {
 
 // Check if genome parameter has a correct value
 if (!params.genomes.keySet().contains(params.genome)) {
-  to_exit=true; log.error "Reference data for genome \"${params.genome}\" is not available. Please choose one of: ${params.genomes.keySet().join(", ")}."
+  to_exit=true; log.error "Reference data for genome \"${params.genome}\" is not available. Please choose one of: ${params.genomes.keySet().join(", ")}. \nAs an alternative you can provide your own reference files with parameters: \nnextflow run . [other parameters] --fasta file.fa --fasta_fai file.fa.fai --bwa file.fa.{amb,ann,bwt,pac,sa} \nNote: regex defition way for bwa has to be followed exactly as in example above, change only the basename to provide your own bwa index files."
 }
 
 if (to_exit) exit 1, "One or more inputs are missing. Aborting."
