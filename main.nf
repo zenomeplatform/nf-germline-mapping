@@ -424,11 +424,32 @@ process merge_bams_by_sample {
     set val(sample_name), file(bam_files) from ch_mapped_reads_grouped_by_sample
 
     output:
-    file("${sample_name}.merged.bam") into ch_mapped_reads_merged_by_sample
+    set val(sample_name), file("${sample_name}.merged.bam") into ch_mapped_reads_merged_by_sample
 
     script:
     """
     samtools merge -@ ${task.cpus} ${sample_name}.merged.bam ${bam_files}
+    """
+}
+
+
+process sort_bams {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(merged_bam) from ch_mapped_reads_merged_by_sample
+
+    output:
+    set val(sample_name), file("${sample_name}.namesorted.bam") into ch_mapped_reads_sorted
+
+    script:
+    """
+    picard SortSam \
+        I=${merged_bam} \
+        O=${sample_name}.namesorted.bam \
+        SO=queryname
     """
 }
 
