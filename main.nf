@@ -141,7 +141,7 @@ Channel
     .fromPath(params.input)
     .ifEmpty { exit 1, "Cannot find input file : ${params.input}" }
     .splitCsv(skip:1)
-    .map {sample_name, fastq_path_1, fastq_path_2  ->
+    .map {sample_name, fastq_path_1, fastq_path_2, LB  ->
 
       if (params.metadata_from_file_name) {
           sample_name_parsed = file(fastq_path_1).simpleName.split(params.sample_name_format_delimeter)
@@ -174,7 +174,9 @@ Channel
           barcode     = sample_name
       }
 
-      [ sample_name, file(fastq_path_1), file(fastq_path_2), bio_type, seq_type, seq_machine, flowcell_id, lane, barcode ]
+      read_group_LB = LB
+
+      [ sample_name, file(fastq_path_1), file(fastq_path_2), bio_type, seq_type, seq_machine, flowcell_id, lane, barcode, read_group_LB ]
     }
     .set { ch_input_fastq }
 
@@ -215,7 +217,8 @@ process fastqc_raw {
         val(seq_machine),
         val(flowcell_id),
         val(lane),
-        val(barcode) from ch_input_fastq_for_qc
+        val(barcode),
+        val(read_group_LB) from ch_input_fastq_for_qc
 
     output:
     set val(sample_name), file("fastqc_${sample_name}_raw_logs") into ch_fastq_qc_raw
@@ -248,7 +251,8 @@ process trim_fastqc {
         val(seq_machine),
         val(flowcell_id),
         val(lane),
-        val(barcode) from ch_input_fastq_to_trim
+        val(barcode),
+        val(read_group_LB) from ch_input_fastq_to_trim
     each file(adapters) from ch_adapters
 
     output:
@@ -260,7 +264,8 @@ process trim_fastqc {
         val(seq_machine),
         val(flowcell_id),
         val(lane),
-        val(barcode) into (ch_fastq_trimmed_to_map, ch_fastq_trimmed_for_qc)
+        val(barcode),
+        val(read_group_LB) into (ch_fastq_trimmed_to_map, ch_fastq_trimmed_for_qc)
     set val(sample_name), file("flexbar_${sample_name}.log") into ch_trimming_report
 
     script:
@@ -300,7 +305,8 @@ process fastqc_trimmed {
         val(seq_machine),
         val(flowcell_id),
         val(lane),
-        val(barcode) from ch_fastq_trimmed_for_qc
+        val(barcode),
+        val(read_group_LB) from ch_fastq_trimmed_for_qc
 
     output:
     set val(sample_name), file("fastqc_${sample_name}_trimmed_logs") into ch_fastq_qc_trimmed
@@ -377,11 +383,12 @@ process map_reads {
         val(seq_machine),
         val(flowcell_id),
         val(lane),
-        val(barcode) from ch_fastq_trimmed_to_map
+        val(barcode),
+        val(read_group_LB) from ch_fastq_trimmed_to_map
     file(bwa_indexes) from ch_bwa
 
     output:
-    file("${fastq_1.simpleName}_L${number_fq_pairs}.bam") into ch_mapped_reads
+    file("${fastq_1.simpleName}_L${read_group_LB}.bam") into ch_mapped_reads
 
     script:
     seq_type_modified = sample_name[2]
@@ -393,16 +400,14 @@ process map_reads {
       seq_machine_modified = "Unknown_seq_machine"
     }
 
-    number_fq_pairs = 1 // TODO
-
     """
     bwa mem -t ${task.cpus} \
         -Y \
-        -R "@RG\\tID:${seq_type_modified}\\tPL:${seq_machine_modified}\\tPU:v${flowcell_id}.${lane}.${barcode}\\tLB:exome_lib${number_fq_pairs}\\tSM:${sample_name}" \
+        -R "@RG\\tID:${seq_type_modified}\\tPL:${seq_machine_modified}\\tPU:v${flowcell_id}.${lane}.${barcode}\\tLB:exome_lib${read_group_LB}\\tSM:${sample_name}" \
         ${bwa_indexes[1].baseName} \
         ${fastq_1} \
         ${fastq_2} \
-      | samtools view -bS -@${task.cpus} - > ${fastq_1.simpleName}_L${number_fq_pairs}.bam;
+      | samtools view -bS -@${task.cpus} - > ${fastq_1.simpleName}_L${read_group_LB}.bam;
     """
 }
 
