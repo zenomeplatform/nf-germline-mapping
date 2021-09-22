@@ -454,6 +454,32 @@ process sort_bams {
 }
 
 
+process mark_duplicates  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(sorted_bam) from ch_mapped_reads_sorted
+
+    output:
+    set val(sample_name), file("${sample_name}.namesorted_mrkdup.bam") into ch_mapped_reads_mrkdup
+    file("${sample_name}_mrkdup_metrics.txt") into ch_ch_mapped_reads_mrkdup_metrics
+
+    script:
+    """
+    picard MarkDuplicates \
+        I=${sorted_bam} \
+        O=${sample_name}.namesorted_mrkdup.bam \
+        ASSUME_SORT_ORDER=queryname \
+        METRICS_FILE=${sample_name}_mrkdup_metrics.txt \
+        QUIET=true \
+        COMPRESSION_LEVEL=0 \
+        VALIDATION_STRINGENCY=LENIENT
+    """
+}
+
+
 /*
  * Workflow completion
  */
