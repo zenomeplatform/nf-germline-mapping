@@ -404,7 +404,7 @@ process map_reads {
         ${fastq_2} \
       | samtools view -bS -@${task.cpus} - > ${fastq_1.simpleName}_L${number_fq_pairs}.bam;
     """
-  }
+}
 
 
 /*
