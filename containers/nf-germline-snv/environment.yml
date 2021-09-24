@@ -12,3 +12,4 @@ dependencies:
   - bioconda::bwa=0.7.17
   - bioconda::samtools=1.13
   - bioconda::picard=2.26.2
+  - bioconda::gatk4=4.2.2.0
