@@ -98,6 +98,7 @@ summary['Input file']       = params.input
 if (!params.fasta) summary['Genome build'] = params.genome
 if (params.fasta) summary['Reference genome'] = params.fasta
 if (params.fasta) summary['Reference genome index'] = params.fasta_fai
+if (params.fasta) summary['Reference genome dict'] = params.fasta_dict
 if (params.bwa) summary['BWA index'] = params.bwa
 if (params.adapters) summary['Adapters'] = params.adapters
 if (params.cleanup) summary['Cleanup'] = "Cleanup is turned on"
@@ -187,9 +188,11 @@ ch_input_fastq.into {
 
 refgenome = params.fasta ? params.fasta : params.genomes[params.genome].fasta
 refgenome_index = params.fasta ? params.fasta_fai : params.genomes[params.genome].fasta_fai
+refgenome_dict = params.fasta ? params.fasta_dict : params.genomes[params.genome].fasta_dict
 
 ch_refgenome = Channel.value(file(refgenome))
 ch_refgenome_index = Channel.value(file(refgenome_index))
+ch_refgenome_dict = Channel.value(file(refgenome_dict))
 
 bwa = params.bwa ? params.bwa : params.genomes[params.genome].bwa
 ch_bwa = Channel.fromFilePairs(bwa, size: 5, flat: true)
