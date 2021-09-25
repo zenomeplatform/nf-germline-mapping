@@ -197,9 +197,35 @@ ch_refgenome_dict = Channel.value(file(refgenome_dict))
 bwa = params.bwa ? params.bwa : params.genomes[params.genome].bwa
 ch_bwa = Channel.fromFilePairs(bwa, size: 5, flat: true)
 
+if (params.known_sites) {
+    ch_known_sites_1 = Channel.fromPath(params.known_sites)
+    known_sites_index = params.known_sites_index ? params.known_sites_index : "${params.known_sites}.tbi"
+    ch_known_sites_1_index = Channel.fromPath(known_sites_index)
+} else {
+    ch_known_sites_1 = Channel.value(file(params.genomes[params.genome].known_sites))
+    ch_known_sites_1_index = Channel.value(file(params.genomes[params.genome].known_sites_index))
+}
+
 // Optional inputs
 ch_adapters = params.adapters ? Channel.value(file(params.adapters)) : "null"
 
+if (params.known_sites_2) {
+    ch_known_sites_2 = Channel.fromPath(params.known_sites_2)
+    known_sites_2_index = params.known_sites_2_index ? params.known_sites_2_index : "${params.known_sites_2}.tbi"
+    ch_known_sites_2_index = Channel.fromPath(known_sites_2_index)
+} else {
+    ch_known_sites_2 = "null"
+    ch_known_sites_2_index = "null"
+}
+
+if (params.known_sites_3) {
+    ch_known_sites_3 = Channel.fromPath(params.known_sites_3)
+    known_sites_3_index = params.known_sites_3_index ? params.known_sites_3_index : "${params.known_sites_3}.tbi"
+    ch_known_sites_3_index = Channel.fromPath(known_sites_3_index)
+} else {
+    ch_known_sites_3 = "null"
+    ch_known_sites_3_index = "null"
+}
 
 
 /*
@@ -503,6 +529,43 @@ process sort_bams_by_coord  {
 
     picard BuildBamIndex \
         I=${sample_name}.sorted_mrkdup.bam
+    """
+}
+
+process calculate_BQSR  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/align/", pattern: "*.table", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam), file(bam_index) from ch_mapped_reads_mrkdup_sorted
+    file(fasta) from ch_refgenome
+    file(fasta_fai) from ch_refgenome_index
+    file(fasta_dict) from ch_refgenome_dict
+    file(known_sites_1) from ch_known_sites_1
+    file(known_sites_1_index) from ch_known_sites_1_index
+    each file(known_sites_2) from ch_known_sites_2
+    each file(known_sites_2_index) from ch_known_sites_2_index
+    each file(known_sites_3) from ch_known_sites_3
+    each file(known_sites_3_index) from ch_known_sites_3_index
+
+    output:
+    set val(sample_name), file(bam), file(bam_index), file("${sample_name}.sorted_mrkdup_bqsr.table") into ch_mapped_reads_with_BQSR
+
+    script:
+    optional_known_sites_2_arg = params.known_sites_2 ? "--known-sites ${known_sites_2}" : ""
+    optional_known_sites_3_arg = params.known_sites_3 ? "--known-sites ${known_sites_3}" : ""
+    """
+    gatk BaseRecalibrator \
+        -R ${fasta} \
+        -I ${bam} \
+        -O ${sample_name}.sorted_mrkdup_bqsr.table \
+        --known-sites ${known_sites_1} \
+        ${optional_known_sites_2_arg} \
+        ${optional_known_sites_3_arg} \
+        --preserve-qscores-less-than ${params.bqsr_preserve_qscores_less_than} \
+        --disable-bam-index-caching \
+        #-L \$PATH/exome_bed/exome_regions.interval_list
     """
 }
 
