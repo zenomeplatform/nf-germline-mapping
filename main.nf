@@ -215,8 +215,15 @@ if (params.known_sites_2) {
     known_sites_2_index = params.known_sites_2_index ? params.known_sites_2_index : "${params.known_sites_2}.tbi"
     ch_known_sites_2_index = Channel.fromPath(known_sites_2_index)
 } else {
-    ch_known_sites_2 = "null"
-    ch_known_sites_2_index = "null"
+    if ( params.genomes[params.genome].containsKey("known_sites_2") ) {
+      log.info "ch_known_sites_2 WAS found in keys"
+      ch_known_sites_2 = Channel.value(file(params.genomes[params.genome].known_sites_2))
+      ch_known_sites_2_index = Channel.value(file(params.genomes[params.genome].known_sites_2_index))
+    } else {
+      log.info "ch_known_sites_2 was not found in keys"
+      ch_known_sites_2 = "null"
+      ch_known_sites_2_index = "null"
+    }
 }
 
 if (params.known_sites_3) {
