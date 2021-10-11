@@ -102,7 +102,20 @@ if (params.fasta) summary['Reference genome dict'] = params.fasta_dict
 if (params.bwa) summary['BWA index'] = params.bwa
 if (params.adapters) summary['Adapters'] = params.adapters
 if (params.cleanup) summary['Cleanup'] = "Cleanup is turned on"
-summary['Known sites']       = params.genomes[params.genome].known_sites_index
+summary['Known sites']       = params.genomes[params.genome].known_sites
+summary['Known sites index']       = params.genomes[params.genome].known_sites_index
+if ( params.known_sites_2 || params.genomes[params.genome].containsKey("known_sites_2") ) {
+  summary['Known sites 2']       = params.known_sites_2 ? params.known_sites_2 : params.genomes[params.genome].containsKey("known_sites_2") ? params.genomes[params.genome].known_sites_2 : "null"
+}
+if ( params.known_sites_2_index || params.genomes[params.genome].containsKey("known_sites_2_index") ) {
+  summary['Known sites 2 index']       = params.known_sites_2_index ? params.known_sites_2_index : params.genomes[params.genome].containsKey("known_sites_2_index") ? params.genomes[params.genome].known_sites_2_index : "null"
+}
+if ( params.known_sites_3 || params.genomes[params.genome].containsKey("known_sites_3") ) {
+  summary['Known sites 3']       = params.known_sites_3 ? params.known_sites_3 : params.genomes[params.genome].containsKey("known_sites_3") ? params.genomes[params.genome].known_sites_3 : "null"
+}
+if ( params.known_sites_3 || params.genomes[params.genome].containsKey("known_sites_3_index") ) {
+  summary['Known sites 3 index']       = params.known_sites_3_index ? params.known_sites_3_index : params.genomes[params.genome].containsKey("known_sites_3_index") ? params.genomes[params.genome].known_sites_3_index : "null"
+}
 
 log.info summary.collect { k,v -> "${k.padRight(20)}: $v" }.join("\n")
 log.info "-\033[2m--------------------------------------------------\033[0m-"
