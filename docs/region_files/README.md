@@ -67,6 +67,6 @@ V7 files have two kinds of files - regions and probes, while V6 files have only 
 ## How to use
 The region files can be provided as optional input to the pipeline with `--regions` parameter:
 ```
-nextflow run . -profile test --genome hg37 --max_memory 6.GB --regions assets/regions_files/V6/hg37/SS_V6_hg19_regions.sorted.merged.no_chr.bed
+nextflow run . -profile test_hg37 --regions assets/regions_files/V6/hg37/SS_V6_hg19_regions.sorted.merged.no_chr.bed
 nextflow run . -profile test_hg38,yandex --accessKey <accessKey> --secretKey <secretKey> --regions s3://zenome-ngs-data/reagents/sureselect/V7/hg38/SS_V7_hg38_probes.bed.interval_list
 ```
