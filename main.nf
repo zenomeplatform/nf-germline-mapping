@@ -110,6 +110,7 @@ if (params.fasta) summary['Reference genome index'] = params.fasta_fai
 if (params.fasta) summary['Reference genome dict'] = params.fasta_dict
 if (params.bwa) summary['BWA index'] = params.bwa
 if (params.adapters) summary['Adapters'] = params.adapters
+if (params.regions) summary['Target regions'] = params.regions
 summary['Known sites']       = known_sites
 summary['Known sites index'] = known_sites_index
 if ( known_sites_2 ) {
