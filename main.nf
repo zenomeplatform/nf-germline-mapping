@@ -13,6 +13,8 @@ def helpMessage() {
                                 SRA123456,path/to/SRA123456_1.fq.gz,path/to/SRA123456_2.fq.gz
                                 SRA345678,path/to/SRA345678_1.fq.gz,path/to/SRA345678_2.fq.gz
 
+    --genome                    Genome build version. Possible values: ${params.genomes.keySet().join(", ")}.
+
     Optional arguments:
     --adapters                  Fasta file contaning adapter sequences to be trimmed from the raw fastq files.
 
@@ -93,6 +95,10 @@ summary['Script dir']       = workflow.projectDir
 summary['User']             = workflow.userName
 summary['Config Profile']   = workflow.profile
 summary['Input file']       = params.input
+if (!params.fasta) summary['Genome build'] = params.genome
+if (params.fasta) summary['Reference genome'] = params.fasta
+if (params.fasta) summary['Reference genome index'] = params.fasta_fai
+if (params.bwa) summary['BWA index'] = params.bwa
 if (params.adapters) summary['Adapters'] = params.adapters
 if (params.cleanup) summary['Cleanup'] = "Cleanup is turned on"
 
@@ -119,7 +125,12 @@ if (workflow.profile.contains('yandex')) {
   if (!params.secretKey) {to_exit=true; log.error "Please provide yandex secretKey to be used for yandex s3 bucket access with --secretKey '<key>' argument. Single quotes are important."}
 }
 
-if (to_exit) exit 1, "One or more inputs are missing. Termingating pipeline."
+// Check if genome parameter has a correct value
+if (!params.genomes.keySet().contains(params.genome)) {
+  to_exit=true; log.error "Reference data for genome \"${params.genome}\" is not available. Please choose one of: ${params.genomes.keySet().join(", ")}. \nAs an alternative you can provide your own reference files with parameters: \nnextflow run . [other parameters] --fasta file.fa --fasta_fai file.fa.fai --bwa file.fa.{amb,ann,bwt,pac,sa} \nNote: regex defition way for bwa has to be followed exactly as in example above, change only the basename to provide your own bwa index files."
+}
+
+if (to_exit) exit 1, "One or more inputs are missing. Aborting."
 
 
 /*
@@ -130,7 +141,7 @@ Channel
     .fromPath(params.input)
     .ifEmpty { exit 1, "Cannot find input file : ${params.input}" }
     .splitCsv(skip:1)
-    .map {sample_name, fastq_path_1, fastq_path_2  ->
+    .map {sample_name, fastq_path_1, fastq_path_2, LB  ->
 
       if (params.metadata_from_file_name) {
           sample_name_parsed = file(fastq_path_1).simpleName.split(params.sample_name_format_delimeter)
@@ -157,13 +168,15 @@ Channel
       if (!params.metadata_from_file_name) {
           bio_type    = "not_provided"
           seq_type    = "not_provided"
-          seq_machine = "not_provided"
+          seq_machine = "IL"
           flowcell_id = sample_name
           lane        = sample_name
           barcode     = sample_name
       }
 
-      [ sample_name, file(fastq_path_1), file(fastq_path_2), bio_type, seq_type, seq_machine, flowcell_id, lane, barcode ]
+      read_group_LB = LB
+
+      [ sample_name, file(fastq_path_1), file(fastq_path_2), bio_type, seq_type, seq_machine, flowcell_id, lane, barcode, read_group_LB ]
     }
     .set { ch_input_fastq }
 
@@ -171,6 +184,15 @@ ch_input_fastq.into {
   ch_input_fastq_for_qc;
   ch_input_fastq_to_trim
 }
+
+refgenome = params.fasta ? params.fasta : params.genomes[params.genome].fasta
+refgenome_index = params.fasta ? params.fasta_fai : params.genomes[params.genome].fasta_fai
+
+ch_refgenome = Channel.value(file(refgenome))
+ch_refgenome_index = Channel.value(file(refgenome_index))
+
+bwa = params.bwa ? params.bwa : params.genomes[params.genome].bwa
+ch_bwa = Channel.fromFilePairs(bwa, size: 5, flat: true)
 
 // Optional inputs
 ch_adapters = params.adapters ? Channel.value(file(params.adapters)) : "null"
@@ -195,7 +217,8 @@ process fastqc_raw {
         val(seq_machine),
         val(flowcell_id),
         val(lane),
-        val(barcode) from ch_input_fastq_for_qc
+        val(barcode),
+        val(read_group_LB) from ch_input_fastq_for_qc
 
     output:
     set val(sample_name), file("fastqc_${sample_name}_raw_logs") into ch_fastq_qc_raw
@@ -228,7 +251,8 @@ process trim_fastqc {
         val(seq_machine),
         val(flowcell_id),
         val(lane),
-        val(barcode) from ch_input_fastq_to_trim
+        val(barcode),
+        val(read_group_LB) from ch_input_fastq_to_trim
     each file(adapters) from ch_adapters
 
     output:
@@ -240,7 +264,8 @@ process trim_fastqc {
         val(seq_machine),
         val(flowcell_id),
         val(lane),
-        val(barcode) into (ch_fastq_trimmed_to_map, ch_fastq_trimmed_for_qc)
+        val(barcode),
+        val(read_group_LB) into (ch_fastq_trimmed_to_map, ch_fastq_trimmed_for_qc)
     set val(sample_name), file("flexbar_${sample_name}.log") into ch_trimming_report
 
     script:
@@ -280,7 +305,8 @@ process fastqc_trimmed {
         val(seq_machine),
         val(flowcell_id),
         val(lane),
-        val(barcode) from ch_fastq_trimmed_for_qc
+        val(barcode),
+        val(read_group_LB) from ch_fastq_trimmed_for_qc
 
     output:
     set val(sample_name), file("fastqc_${sample_name}_trimmed_logs") into ch_fastq_qc_trimmed
@@ -342,6 +368,140 @@ if (params.multiqc_prealignment_all) {
     }
 }
 
+
+process map_reads {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
+
+    input:
+    set val(sample_name),
+        file(fastq_1),
+        file(fastq_2),
+        val(bio_type),
+        val(seq_type),
+        val(seq_machine),
+        val(flowcell_id),
+        val(lane),
+        val(barcode),
+        val(read_group_LB) from ch_fastq_trimmed_to_map
+    each file(bwa_indexes) from ch_bwa
+
+    output:
+    set val(sample_name), file("${fastq_1.simpleName}_L${read_group_LB}.bam") into ch_mapped_reads
+
+    script:
+    seq_type_modified = sample_name[2]
+
+    if (params.seq_machine_catalog.keySet().contains(seq_machine)) {
+      seq_machine_modified = params.seq_machine_catalog[seq_machine].full_name
+    } else {
+      log.warn "Sample ${fastq_1.name} has unknown sequening machine type \"${seq_machine}\". \nKnow machines in catalog: ${params.seq_machine_catalog.keySet().join(", ")}. \nSample will receive \"Unknown_seq_machine\" value."
+      seq_machine_modified = "Unknown_seq_machine"
+    }
+
+    """
+    bwa mem -t ${task.cpus} \
+        -Y \
+        -R "@RG\\tID:${seq_type_modified}\\tPL:${seq_machine_modified}\\tPU:v${flowcell_id}.${lane}.${barcode}\\tLB:exome_lib${read_group_LB}\\tSM:${sample_name}" \
+        ${bwa_indexes[1].baseName} \
+        ${fastq_1} \
+        ${fastq_2} \
+      | samtools view -bS -@${task.cpus} - > ${fastq_1.simpleName}_L${read_group_LB}.bam;
+    """
+}
+
+
+ch_mapped_reads_grouped_by_sample = ch_mapped_reads.groupTuple(by: 0).view()
+
+
+process merge_bams_by_sample {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam_files) from ch_mapped_reads_grouped_by_sample
+
+    output:
+    set val(sample_name), file("${sample_name}.merged.bam") into ch_mapped_reads_merged_by_sample
+
+    script:
+    """
+    samtools merge -@ ${task.cpus} ${sample_name}.merged.bam ${bam_files}
+    """
+}
+
+
+process sort_bams_by_name {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(merged_bam) from ch_mapped_reads_merged_by_sample
+
+    output:
+    set val(sample_name), file("${sample_name}.namesorted.bam") into ch_mapped_reads_sorted_by_name
+
+    script:
+    """
+    picard SortSam \
+        I=${merged_bam} \
+        O=${sample_name}.namesorted.bam \
+        SO=queryname
+    """
+}
+
+
+process mark_duplicates  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(sorted_bam) from ch_mapped_reads_sorted_by_name
+
+    output:
+    set val(sample_name), file("${sample_name}.namesorted_mrkdup.bam") into ch_mapped_reads_mrkdup
+    file("${sample_name}_mrkdup_metrics.txt") into ch_ch_mapped_reads_mrkdup_metrics
+
+    script:
+    """
+    picard MarkDuplicates \
+        I=${sorted_bam} \
+        O=${sample_name}.namesorted_mrkdup.bam \
+        ASSUME_SORT_ORDER=queryname \
+        METRICS_FILE=${sample_name}_mrkdup_metrics.txt \
+        QUIET=true \
+        COMPRESSION_LEVEL=0 \
+        VALIDATION_STRINGENCY=LENIENT
+    """
+}
+
+
+process sort_bams_by_coord  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam_mrkdupl) from ch_mapped_reads_mrkdup
+
+    output:
+    set val(sample_name), file("${sample_name}.sorted_mrkdup.bam"), file("${sample_name}.sorted_mrkdup.bai") into ch_mapped_reads_mrkdup_sorted
+
+    script:
+    """
+    picard SortSam \
+        I=${bam_mrkdupl} \
+        O=${sample_name}.sorted_mrkdup.bam \
+        SO=coordinate
+
+    picard BuildBamIndex \
+        I=${sample_name}.sorted_mrkdup.bam
+    """
+}
 
 
 /*
