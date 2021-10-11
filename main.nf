@@ -102,6 +102,7 @@ if (params.fasta) summary['Reference genome dict'] = params.fasta_dict
 if (params.bwa) summary['BWA index'] = params.bwa
 if (params.adapters) summary['Adapters'] = params.adapters
 if (params.cleanup) summary['Cleanup'] = "Cleanup is turned on"
+summary['Known sites']       = params.genomes[params.genome].known_sites_index
 
 log.info summary.collect { k,v -> "${k.padRight(20)}: $v" }.join("\n")
 log.info "-\033[2m--------------------------------------------------\033[0m-"
