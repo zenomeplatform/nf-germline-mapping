@@ -30,6 +30,20 @@ Pipeline uses the following tools:
 nextflow run . -profile test
 ```
 
+Test data but with full reference genome:
+```
+nextflow run . -profile test_hg37
+nextflow run . -profile test_hg38
+```
+
+With external yandex s3 bucket:
+```
+nextflow run . -profile test2,yandex --accessKey <accessKey> --secretKey <secretKey>
+nextflow run . -profile test2_hg37,yandex --accessKey <accessKey> --secretKey <secretKey>
+nextflow run . -profile test2_hg38,yandex --accessKey <accessKey> --secretKey <secretKey>
+```
+
+
 5. Using your own data:
 ```
 nextflow run . --input test_data_paths.csv --metadata_from_file_name false
