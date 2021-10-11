@@ -249,6 +249,8 @@ if (known_sites_3) {
   ch_known_sites_3_index = "null"
 }
 
+ch_regions = params.regions ? Channel.value(file(params.regions)) : "null"
+
 
 /*
  * Processes
@@ -570,6 +572,7 @@ process calculate_BQSR  {
     each file(known_sites_2_index) from ch_known_sites_2_index
     each file(known_sites_3) from ch_known_sites_3
     each file(known_sites_3_index) from ch_known_sites_3_index
+    each file(regions) from ch_regions
 
     output:
     set val(sample_name), file(bam), file(bam_index), file("${sample_name}.sorted_mrkdup_bqsr.table") into ch_mapped_reads_with_BQSR
@@ -577,6 +580,7 @@ process calculate_BQSR  {
     script:
     optional_known_sites_2_arg = params.known_sites_2 ? "--known-sites ${known_sites_2}" : ""
     optional_known_sites_3_arg = params.known_sites_3 ? "--known-sites ${known_sites_3}" : ""
+    optional_regions_file      = params.regions ? "-L ${regions}" : ""
     """
     gatk BaseRecalibrator \
         -R ${fasta} \
@@ -587,7 +591,7 @@ process calculate_BQSR  {
         ${optional_known_sites_3_arg} \
         --preserve-qscores-less-than ${params.bqsr_preserve_qscores_less_than} \
         --disable-bam-index-caching \
-        #-L \$PATH/exome_bed/exome_regions.interval_list
+        ${optional_regions_file}
     """
 }
 
