@@ -600,7 +600,7 @@ process calculate_BQSR  {
 process apply_BQSR  {
     tag "$sample_name"
     label 'low_memory'
-    publishDir "${params.outdir}/${sample_name}/align/", pattern: "*.table", mode: 'copy'
+    publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
 
     input:
     set val(sample_name), file(bam), file(bam_index), file(bqsr_table) from ch_mapped_reads_with_BQSR
