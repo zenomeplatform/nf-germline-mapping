@@ -121,6 +121,7 @@ if ( known_sites_3 ) {
   summary['Known sites 3']   = known_sites_3
   summary['Known sites 3 index'] = known_sites_3_index
 }
+if (params.bqsr_static_quantized_quals) summary['BQSR static quantized quals'] = params.bqsr_static_quantized_quals
 if (params.cleanup) summary['Cleanup'] = "Cleanup is turned on"
 
 log.info summary.collect { k,v -> "${k.padRight(20)}: $v" }.join("\n")
@@ -593,6 +594,42 @@ process calculate_BQSR  {
         --preserve-qscores-less-than ${params.bqsr_preserve_qscores_less_than} \
         --disable-bam-index-caching \
         ${optional_regions_file}
+    """
+}
+
+process apply_BQSR  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/align/", pattern: "*.table", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam), file(bam_index), file(bqsr_table) from ch_mapped_reads_with_BQSR
+    file(fasta) from ch_refgenome
+    file(fasta_fai) from ch_refgenome_index
+    file(fasta_dict) from ch_refgenome_dict
+
+    output:
+    set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr.bam"), file("${sample_name}.sorted_mrkdup_bqsr.bai") into ch_recalibrated_mapped_reads
+
+    script:
+    arg_static_quantized_quals = ""
+    if (params.bqsr_static_quantized_quals) {
+      static_quantized_quals_array = params.bqsr_static_quantized_quals.toString().split(',')
+      for(qual in static_quantized_quals_array) {
+         arg_static_quantized_quals += "--static-quantized-quals ${qual} "
+      }
+    }
+    """
+    gatk ApplyBQSR \
+        -R ${fasta} \
+        -I ${bam} \
+        -O ${sample_name}.sorted_mrkdup_bqsr.bam \
+        --bqsr-recal-file ${bqsr_table} \
+        --preserve-qscores-less-than ${params.bqsr_preserve_qscores_less_than} \
+        ${arg_static_quantized_quals}
+
+    picard BuildBamIndex \
+        I=${sample_name}.sorted_mrkdup_bqsr.bam
     """
 }
 
