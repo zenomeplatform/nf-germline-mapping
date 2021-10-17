@@ -635,6 +635,7 @@ process apply_BQSR  {
 
 ch_recalibrated_mapped_reads.into{
   ch_recalibrated_mapped_reads_for_samtools_flagstat;
+  ch_recalibrated_mapped_reads_for_incerter_size_qc;
 }
 
 
@@ -654,6 +655,28 @@ process qc_samtools_flagstat  {
     samtools flagstat ${bam} > "${sample_name}.sorted_mrkdup_bqsr_flagstat.txt"
     """
 }
+
+
+process qc_incerter_size  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/post_align_qc/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam), file(bai) from ch_recalibrated_mapped_reads_for_incerter_size_qc
+
+    output:
+    set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.txt"), file("${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.pdf") into ch_incerter_size_qc
+
+    script:
+    """
+    picard CollectInsertSizeMetrics \
+        I=${bam} \
+        O=${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.txt \
+        H=${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.pdf
+    """
+}
+
 
 /*
  * Workflow completion
