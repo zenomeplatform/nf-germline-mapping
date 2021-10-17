@@ -633,6 +633,27 @@ process apply_BQSR  {
     """
 }
 
+ch_recalibrated_mapped_reads.into{
+  ch_recalibrated_mapped_reads_for_samtools_flagstat;
+}
+
+
+process qc_samtools_flagstat  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/post_align_qc/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam), file("${sample_name}.sorted_mrkdup_bqsr.bai") from ch_recalibrated_mapped_reads_for_samtools_flagstat
+
+    output:
+    set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_flagstat.txt") into ch_samtools_flagstat
+
+    script:
+    """
+    samtools flagstat ${bam} > "${sample_name}.sorted_mrkdup_bqsr_flagstat.txt"
+    """
+}
 
 /*
  * Workflow completion
