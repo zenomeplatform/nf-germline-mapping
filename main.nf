@@ -636,6 +636,7 @@ process apply_BQSR  {
 ch_recalibrated_mapped_reads.into{
   ch_recalibrated_mapped_reads_for_samtools_flagstat;
   ch_recalibrated_mapped_reads_for_incerter_size_qc;
+  ch_recalibrated_mapped_reads_for_alignment_summary;
 }
 
 
@@ -674,6 +675,30 @@ process qc_incerter_size  {
         I=${bam} \
         O=${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.txt \
         H=${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.pdf
+    """
+}
+
+
+process qc_alignment_summary  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/post_align_qc/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam), file(bai) from ch_recalibrated_mapped_reads_for_alignment_summary
+    file(fasta) from ch_refgenome
+    file(fasta_fai) from ch_refgenome_index
+    file(fasta_dict) from ch_refgenome_dict
+
+    output:
+    set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_alignment_metrics.txt") into ch_alignment_summary_qc
+
+    script:
+    """
+    picard CollectAlignmentSummaryMetrics \
+        I=${bam} \
+        O=${sample_name}.sorted_mrkdup_bqsr_alignment_metrics.txt \
+        R=${fasta}
     """
 }
 
