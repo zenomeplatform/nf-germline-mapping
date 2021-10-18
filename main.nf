@@ -83,6 +83,15 @@ def check_max(obj, type) {
 }
 
 
+// Simplified conditional known_sites parameters
+known_sites         = params.known_sites ? params.known_sites : params.genomes[params.genome].containsKey("known_sites") ? params.genomes[params.genome].known_sites : null
+known_sites_index   = params.known_sites_index ? params.known_sites_index : params.genomes[params.genome].containsKey("known_sites_index") ? params.genomes[params.genome].known_sites_index : null
+known_sites_2       = params.known_sites_2 ? params.known_sites_2 : params.genomes[params.genome].containsKey("known_sites_2") ? params.genomes[params.genome].known_sites_2 : null
+known_sites_2_index = params.known_sites_2_index ? params.known_sites_2_index : params.genomes[params.genome].containsKey("known_sites_2_index") ? params.genomes[params.genome].known_sites_2_index : null
+known_sites_3       = params.known_sites_3 ? params.known_sites_3 : params.genomes[params.genome].containsKey("known_sites_3") ? params.genomes[params.genome].known_sites_3 : null
+known_sites_3_index = params.known_sites_3_index ? params.known_sites_3_index : params.genomes[params.genome].containsKey("known_sites_3_index") ? params.genomes[params.genome].known_sites_3_index : null
+
+
 // Header log info
 def summary = [:]
 if (workflow.revision) summary['Pipeline Release'] = workflow.revision
@@ -98,8 +107,20 @@ summary['Input file']       = params.input
 if (!params.fasta) summary['Genome build'] = params.genome
 if (params.fasta) summary['Reference genome'] = params.fasta
 if (params.fasta) summary['Reference genome index'] = params.fasta_fai
+if (params.fasta) summary['Reference genome dict'] = params.fasta_dict
 if (params.bwa) summary['BWA index'] = params.bwa
 if (params.adapters) summary['Adapters'] = params.adapters
+if (params.regions) summary['Target regions'] = params.regions
+summary['Known sites']       = known_sites
+summary['Known sites index'] = known_sites_index
+if ( known_sites_2 ) {
+  summary['Known sites 2']   = known_sites_2
+  summary['Known sites 2 index'] = known_sites_2_index
+}
+if ( known_sites_3 ) {
+  summary['Known sites 3']   = known_sites_3
+  summary['Known sites 3 index'] = known_sites_3_index
+}
 if (params.cleanup) summary['Cleanup'] = "Cleanup is turned on"
 
 log.info summary.collect { k,v -> "${k.padRight(20)}: $v" }.join("\n")
@@ -129,6 +150,17 @@ if (workflow.profile.contains('yandex')) {
 if (!params.genomes.keySet().contains(params.genome)) {
   to_exit=true; log.error "Reference data for genome \"${params.genome}\" is not available. Please choose one of: ${params.genomes.keySet().join(", ")}. \nAs an alternative you can provide your own reference files with parameters: \nnextflow run . [other parameters] --fasta file.fa --fasta_fai file.fa.fai --bwa file.fa.{amb,ann,bwt,pac,sa} \nNote: regex defition way for bwa has to be followed exactly as in example above, change only the basename to provide your own bwa index files."
 }
+
+// Check if at least one file with known variants is provided
+if (!known_sites) {
+  to_exit=true; log.error "Known genomic variants file has not been provided. It is a required input for GATK base recalibration step. \nPlease provide at least one known variants vcf file and its index with parameters --known_variants and --known_variants_index. \nAdditional variant files can be provided with --known_variants_2 and --known_variants_2_index; --known_variants_3 and --known_variants_3_index."
+} else {
+  if (!known_sites_index) {to_exit=true; log.error "Missing index file for genomic variants file \"${known_sites}\". It is a required input for GATK base recalibration step. \nPlease provide the index with parameter --known_variants_index."}
+}
+
+if (known_sites_2 && !known_sites_2_index) {to_exit=true; log.error "Missing index file for genomic variants file \"${known_sites_2}\". It is a required input for GATK base recalibration step. \nPlease provide the index with parameter --known_variants_2_index."}
+if (known_sites_3 && !known_sites_3_index) {to_exit=true; log.error "Missing index file for genomic variants file \"${known_sites_3}\". It is a required input for GATK base recalibration step. \nPlease provide the index with parameter --known_variants_3_index."}
+
 
 if (to_exit) exit 1, "One or more inputs are missing. Aborting."
 
@@ -187,16 +219,38 @@ ch_input_fastq.into {
 
 refgenome = params.fasta ? params.fasta : params.genomes[params.genome].fasta
 refgenome_index = params.fasta ? params.fasta_fai : params.genomes[params.genome].fasta_fai
+refgenome_dict = params.fasta ? params.fasta_dict : params.genomes[params.genome].fasta_dict
 
 ch_refgenome = Channel.value(file(refgenome))
 ch_refgenome_index = Channel.value(file(refgenome_index))
+ch_refgenome_dict = Channel.value(file(refgenome_dict))
 
 bwa = params.bwa ? params.bwa : params.genomes[params.genome].bwa
 ch_bwa = Channel.fromFilePairs(bwa, size: 5, flat: true)
 
+ch_known_sites_1 = Channel.value(file(known_sites))
+ch_known_sites_1_index = Channel.value(file(known_sites_index))
+
 // Optional inputs
 ch_adapters = params.adapters ? Channel.value(file(params.adapters)) : "null"
 
+if (known_sites_2) {
+  ch_known_sites_2 = Channel.value(file(known_sites_2))
+  ch_known_sites_2_index = Channel.value(file(known_sites_2_index))
+} else {
+  ch_known_sites_2 = "null"
+  ch_known_sites_2_index = "null"
+}
+
+if (known_sites_3) {
+  ch_known_sites_3 = Channel.value(file(known_sites_3))
+  ch_known_sites_3_index = Channel.value(file(known_sites_3_index))
+} else {
+  ch_known_sites_3 = "null"
+  ch_known_sites_3_index = "null"
+}
+
+ch_regions = params.regions ? Channel.value(file(params.regions)) : "null"
 
 
 /*
@@ -500,6 +554,45 @@ process sort_bams_by_coord  {
 
     picard BuildBamIndex \
         I=${sample_name}.sorted_mrkdup.bam
+    """
+}
+
+process calculate_BQSR  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/align/", pattern: "*.table", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam), file(bam_index) from ch_mapped_reads_mrkdup_sorted
+    file(fasta) from ch_refgenome
+    file(fasta_fai) from ch_refgenome_index
+    file(fasta_dict) from ch_refgenome_dict
+    file(known_sites_1) from ch_known_sites_1
+    file(known_sites_1_index) from ch_known_sites_1_index
+    each file(known_sites_2) from ch_known_sites_2
+    each file(known_sites_2_index) from ch_known_sites_2_index
+    each file(known_sites_3) from ch_known_sites_3
+    each file(known_sites_3_index) from ch_known_sites_3_index
+    each file(regions) from ch_regions
+
+    output:
+    set val(sample_name), file(bam), file(bam_index), file("${sample_name}.sorted_mrkdup_bqsr.table") into ch_mapped_reads_with_BQSR
+
+    script:
+    optional_known_sites_2_arg = params.known_sites_2 ? "--known-sites ${known_sites_2}" : ""
+    optional_known_sites_3_arg = params.known_sites_3 ? "--known-sites ${known_sites_3}" : ""
+    optional_regions_file      = params.regions ? "-L ${regions}" : ""
+    """
+    gatk BaseRecalibrator \
+        -R ${fasta} \
+        -I ${bam} \
+        -O ${sample_name}.sorted_mrkdup_bqsr.table \
+        --known-sites ${known_sites_1} \
+        ${optional_known_sites_2_arg} \
+        ${optional_known_sites_3_arg} \
+        --preserve-qscores-less-than ${params.bqsr_preserve_qscores_less_than} \
+        --disable-bam-index-caching \
+        ${optional_regions_file}
     """
 }
 
