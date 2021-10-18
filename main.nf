@@ -818,7 +818,7 @@ ch_postalignment_multiqc_files =
 
 
 if (params.multiqc_postalignment_by_sample) {
- process multiqc_postlignment_report_by_sample {
+ process multiqc_postalignment_report_by_sample {
      tag "$sample_name"
      label 'low_memory'
      publishDir "${params.outdir}/multiqc_postalignment_report/${sample_name}/", mode: 'copy'
