@@ -255,6 +255,16 @@ if (known_sites_3) {
 }
 
 ch_regions = params.regions ? Channel.value(file(params.regions)) : "null"
+
+if (known_sites_3) {
+  ch_known_sites_3 = Channel.value(file(known_sites_3))
+  ch_known_sites_3_index = Channel.value(file(known_sites_3_index))
+} else {
+  ch_known_sites_3 = "null"
+  ch_known_sites_3_index = "null"
+}
+
+ch_regions = params.regions ? Channel.value(file(params.regions)) : "null"
 ch_probes = params.probes ? Channel.value(file(params.probes)) : "null"
 
 /*
@@ -599,6 +609,7 @@ process calculate_BQSR  {
         ${optional_regions_file}
     """
 }
+
 
 process apply_BQSR  {
     tag "$sample_name"
