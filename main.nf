@@ -470,7 +470,7 @@ process map_reads {
 }
 
 
-ch_mapped_reads_grouped_by_sample = ch_mapped_reads.groupTuple(by: 0).view()
+ch_mapped_reads_grouped_by_sample = ch_mapped_reads.groupTuple(by: 0)
 
 
 process merge_bams_by_sample {
@@ -673,8 +673,8 @@ process qc_insert_size  {
     set val(sample_name), file(bam), file(bai) from ch_recalibrated_mapped_reads_for_insert_size_qc
 
     output:
-    set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.txt"), file("${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.pdf") into ch_insert_size_qc
-
+    set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.txt") into ch_insert_size_qc
+    file("${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.pdf") into ch_insert_size_qc_pdf
     script:
     """
     picard CollectInsertSizeMetrics \
@@ -785,20 +785,45 @@ process fastqc_mapped {
 
 
 ch_postalignment_multiqc_files =
-  ch_samtools_flagstat
-    .join(ch_insert_size_qc, by: 0)
-    .join(ch_alignment_summary_qc, by: 0)
-    .join(ch_sequencing_artifact_qc, by: 0)
-    .join(ch_fastqc_mapped, by: 0)
+ ch_samtools_flagstat.mix(
+   ch_alignment_summary_qc,
+   ch_sequencing_artifact_qc,
+   ch_fastqc_mapped,
+   ch_insert_size_qc
+ )
+
 
 if (params.regions && params.probes)  {
 ch_postalignment_multiqc_files =
   ch_postalignment_multiqc_files
-    .join(ch_collect_hs_metrics_qc, by: 0)
+    .mix(ch_collect_hs_metrics_qc)
 }
 
-ch_postalignment_multiqc_files
-    .into { ch_postalignment_multiqc_files_by_sample; ch_postalignment_multiqc_files_all }
+ ch_postalignment_multiqc_files
+     .groupTuple()
+     .map { sample_name, files -> [sample_name, files.flatten()]}
+     .into { ch_postalignment_multiqc_files_by_sample; ch_postalignment_multiqc_files_all }
+
+
+
+if (params.multiqc_postalignment_by_sample) {
+ process multiqc_postlignment_report_by_sample {
+     tag "$sample_name"
+     label 'low_memory'
+     publishDir "${params.outdir}/multiqc_postalignment_report/${sample_name}/", mode: 'copy'
+
+     input:
+     set val(sample_name), file("*") from ch_postalignment_multiqc_files_by_sample
+
+     output:
+     file("multiqc_report.html")
+
+     script:
+     """
+     multiqc .
+     """
+   }
+}
 
 
 if (params.multiqc_postalignment_all) {
@@ -807,7 +832,7 @@ if (params.multiqc_postalignment_all) {
       publishDir "${params.outdir}/multiqc_postalignment_report/", mode: 'copy'
 
       input:
-      file("*") from ch_postalignment_multiqc_files_all.collect()
+      file("*") from ch_postalignment_multiqc_files_all.flatten().collect()
 
       output:
       file("multiqc_report.html")
