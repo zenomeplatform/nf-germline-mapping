@@ -635,7 +635,7 @@ process apply_BQSR  {
 
 ch_recalibrated_mapped_reads.into{
   ch_recalibrated_mapped_reads_for_samtools_flagstat;
-  ch_recalibrated_mapped_reads_for_incerter_size_qc;
+  ch_recalibrated_mapped_reads_for_insert_size_qc;
   ch_recalibrated_mapped_reads_for_alignment_summary;
 }
 
@@ -658,16 +658,16 @@ process qc_samtools_flagstat  {
 }
 
 
-process qc_incerter_size  {
+process qc_insert_size  {
     tag "$sample_name"
     label 'low_memory'
     publishDir "${params.outdir}/${sample_name}/post_align_qc/", mode: 'copy'
 
     input:
-    set val(sample_name), file(bam), file(bai) from ch_recalibrated_mapped_reads_for_incerter_size_qc
+    set val(sample_name), file(bam), file(bai) from ch_recalibrated_mapped_reads_for_insert_size_qc
 
     output:
-    set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.txt"), file("${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.pdf") into ch_incerter_size_qc
+    set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.txt"), file("${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.pdf") into ch_insert_size_qc
 
     script:
     """
