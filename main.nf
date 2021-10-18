@@ -758,8 +758,8 @@ if (params.target_regions && params.bait_regions)  {
           I=${bam} \
           O=${sample_name}.sorted_mrkdup_bqsr_hs_metrics.txt \
           R=${fasta} \
-          BI=${target_regions} \
-          TI=${bait_regions}
+          BI=${bait_regions} \
+          TI=${target_regions}
       """
   }
 
