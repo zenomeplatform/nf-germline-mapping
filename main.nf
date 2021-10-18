@@ -163,7 +163,9 @@ if (!known_sites) {
 if (known_sites_2 && !known_sites_2_index) {to_exit=true; log.error "Missing index file for genomic variants file \"${known_sites_2}\". It is a required input for GATK base recalibration step. \nPlease provide the index with parameter --known_variants_2_index."}
 if (known_sites_3 && !known_sites_3_index) {to_exit=true; log.error "Missing index file for genomic variants file \"${known_sites_3}\". It is a required input for GATK base recalibration step. \nPlease provide the index with parameter --known_variants_3_index."}
 
-if (params.target_regions && !params.bait_regions) {to_exit=true; log.error "Specified target regions file \"${params.target_regions}\" but not bait regions file for targeted exome sequencing project. Both files are required for picard qc \"collect_hs_metrics\" step. \nPlease provide the bait regions interval_list file with --bait_regions parameter."}
+if (params.target_regions && !params.bait_regions) {
+    log.warn "Provided target regions but not bait regions. Provided regions file will be used both as target and bait regions for qc_collect_hs_metrics. Alternatively provide bait regions file with --bait_regions parameter."
+}
 if (!params.target_regions && params.bait_regions) {to_exit=true; log.error "Specified bait regions file \"${params.bait_regions}\" but not target regions file for targeted exome sequencing project. Both files are required for picard qc \"collect_hs_metrics\" step. \nPlease provide the target regions interval_list file with --target_regions parameter."}
 
 if (to_exit) exit 1, "One or more inputs are missing. Aborting."
@@ -256,7 +258,14 @@ if (known_sites_3) {
 
 
 ch_target_regions = params.target_regions ? Channel.value(file(params.target_regions)) : "null"
-ch_bait_regions = params.bait_regions ? Channel.value(file(params.bait_regions)) : "null"
+if (params.target_regions && params.bait_regions) {
+  ch_bait_regions = Channel.value(file(params.bait_regions))
+} else if (params.target_regions && !params.bait_regions) {
+  ch_bait_regions = Channel.value(file(params.target_regions))
+} else {
+  ch_bait_regions = "null"
+}
+
 
 /*
  * Processes
