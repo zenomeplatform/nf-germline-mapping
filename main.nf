@@ -642,6 +642,7 @@ ch_recalibrated_mapped_reads.into{
   ch_recalibrated_mapped_reads_for_alignment_summary;
   ch_recalibrated_mapped_reads_for_sequencing_artifact;
   ch_recalibrated_mapped_reads_for_collect_hs_metrics;
+  ch_recalibrated_mapped_reads_for_fastqc_mapped;
 }
 
 
@@ -764,6 +765,23 @@ if (params.regions && params.probes)  {
   ch_collect_hs_metrics_qc = Channel.empty()
 }
 
+
+process fastqc_mapped {
+      tag "$sample_name"
+      label 'low_memory'
+      publishDir "${params.outdir}/${sample_name}/post_align_qc/", mode: 'copy'
+
+      input:
+      set val(sample_name), file(bam), file(bai) from ch_recalibrated_mapped_reads_for_fastqc_mapped
+
+      output:
+      set val(sample_name), file("${bam.baseName}_fastqc.*") into ch_fastqc_mapped
+
+      script:
+      """
+      fastqc -t ${task.threads} ${bam}
+      """
+  }
 
 /*
  * Workflow completion
