@@ -111,6 +111,7 @@ if (params.fasta) summary['Reference genome dict'] = params.fasta_dict
 if (params.bwa) summary['BWA index'] = params.bwa
 if (params.adapters) summary['Adapters'] = params.adapters
 if (params.regions) summary['Target regions'] = params.regions
+if (params.probes) summary['Bait regions'] = params.probes
 summary['Known sites']       = known_sites
 summary['Known sites index'] = known_sites_index
 if ( known_sites_2 ) {
@@ -162,6 +163,8 @@ if (!known_sites) {
 if (known_sites_2 && !known_sites_2_index) {to_exit=true; log.error "Missing index file for genomic variants file \"${known_sites_2}\". It is a required input for GATK base recalibration step. \nPlease provide the index with parameter --known_variants_2_index."}
 if (known_sites_3 && !known_sites_3_index) {to_exit=true; log.error "Missing index file for genomic variants file \"${known_sites_3}\". It is a required input for GATK base recalibration step. \nPlease provide the index with parameter --known_variants_3_index."}
 
+if (params.regions && !params.probes) {to_exit=true; log.error "Specified regions file \"${params.regions}\" but not probes file for targeted exome sequencing project. Both files are required for picard qc \"collect_hs_metrics\" step. \nPlease provide the probes interval_list file with --probes parameter."}
+if (!params.regions && params.probes) {to_exit=true; log.error "Specified probes file \"${params.probes}\" but not regions file for targeted exome sequencing project. Both files are required for picard qc \"collect_hs_metrics\" step. \nPlease provide the regions interval_list file with --regions parameter."}
 
 if (to_exit) exit 1, "One or more inputs are missing. Aborting."
 
@@ -252,7 +255,7 @@ if (known_sites_3) {
 }
 
 ch_regions = params.regions ? Channel.value(file(params.regions)) : "null"
-
+ch_probes = params.probes ? Channel.value(file(params.probes)) : "null"
 
 /*
  * Processes
@@ -638,6 +641,7 @@ ch_recalibrated_mapped_reads.into{
   ch_recalibrated_mapped_reads_for_insert_size_qc;
   ch_recalibrated_mapped_reads_for_alignment_summary;
   ch_recalibrated_mapped_reads_for_sequencing_artifact;
+  ch_recalibrated_mapped_reads_for_collect_hs_metrics;
 }
 
 
@@ -725,6 +729,39 @@ process qc_sequencing_artifact  {
         O=${sample_name}.sorted_mrkdup_bqsr_artifact_metrics.txt \
         R=${fasta}
     """
+}
+
+if (params.regions && params.probes)  {
+
+  process qc_collect_hs_metrics {
+      tag "$sample_name"
+      label 'low_memory'
+      publishDir "${params.outdir}/${sample_name}/post_align_qc/", mode: 'copy'
+
+      input:
+      set val(sample_name), file(bam), file(bai) from ch_recalibrated_mapped_reads_for_collect_hs_metrics
+      file(fasta) from ch_refgenome
+      file(fasta_fai) from ch_refgenome_index
+      file(fasta_dict) from ch_refgenome_dict
+      each file(regions) from ch_regions
+      each file(probes) from ch_probes
+
+      output:
+      set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_hs_metrics.txt") into ch_collect_hs_metrics_qc
+
+      script:
+      """
+      picard CollectHsMetrics \
+          I=${bam} \
+          O=${sample_name}.sorted_mrkdup_bqsr_hs_metrics.txt \
+          R=${fasta} \
+          BI=${regions} \
+          TI=${probes}
+      """
+  }
+
+} else {
+  ch_collect_hs_metrics_qc = Channel.empty()
 }
 
 
