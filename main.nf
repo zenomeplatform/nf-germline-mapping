@@ -783,6 +783,43 @@ process fastqc_mapped {
       """
   }
 
+
+ch_postalignment_multiqc_files =
+  ch_samtools_flagstat
+    .join(ch_insert_size_qc, by: 0)
+    .join(ch_alignment_summary_qc, by: 0)
+    .join(ch_sequencing_artifact_qc, by: 0)
+    .join(ch_fastqc_mapped, by: 0)
+
+if (params.regions && params.probes)  {
+ch_postalignment_multiqc_files =
+  ch_postalignment_multiqc_files
+    .join(ch_collect_hs_metrics_qc, by: 0)
+}
+
+ch_postalignment_multiqc_files
+    .into { ch_postalignment_multiqc_files_by_sample; ch_postalignment_multiqc_files_all }
+
+
+if (params.multiqc_postalignment_all) {
+  process multiqc_postalignment_report_all {
+      label 'low_memory'
+      publishDir "${params.outdir}/multiqc_postalignment_report/", mode: 'copy'
+
+      input:
+      file("*") from ch_postalignment_multiqc_files_all.collect()
+
+      output:
+      file("multiqc_report.html")
+
+      script:
+      """
+      multiqc .
+      """
+    }
+}
+
+
 /*
  * Workflow completion
  */
