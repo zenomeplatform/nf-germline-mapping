@@ -743,7 +743,7 @@ process qc_sequencing_artifact  {
     """
 }
 
-if (params.target_regions && params.bait_regions)  {
+if (params.target_regions)  {
 
   process qc_collect_hs_metrics {
       tag "$sample_name"
@@ -756,7 +756,7 @@ if (params.target_regions && params.bait_regions)  {
       file(fasta_fai) from ch_refgenome_index
       file(fasta_dict) from ch_refgenome_dict
       each file(target_regions) from ch_target_regions
-      each file(bait_regions) from ch_bait_regions
+      each file("bait_regions_file") from ch_bait_regions
 
       output:
       set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_hs_metrics.txt") into ch_collect_hs_metrics_qc
@@ -767,7 +767,7 @@ if (params.target_regions && params.bait_regions)  {
           I=${bam} \
           O=${sample_name}.sorted_mrkdup_bqsr_hs_metrics.txt \
           R=${fasta} \
-          BI=${bait_regions} \
+          BI="bait_regions_file" \
           TI=${target_regions}
       """
   }
@@ -804,7 +804,7 @@ ch_postalignment_multiqc_files =
  )
 
 
-if (params.target_regions && params.bait_regions)  {
+if (params.target_regions)  {
 ch_postalignment_multiqc_files =
   ch_postalignment_multiqc_files
     .mix(ch_collect_hs_metrics_qc)
