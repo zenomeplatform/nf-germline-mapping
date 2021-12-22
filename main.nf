@@ -408,11 +408,11 @@ if (params.multiqc_prealignment_by_sample) {
       set val(sample_name), file(fastqc_raw_dir), file(trimming_log), file(fastqc_trimmed_dir) from ch_prealignment_multiqc_files_by_sample
 
       output:
-      file("multiqc_report.html")
+      file("multiqc_report_${sample_name}.html")
 
       script:
       """
-      multiqc .
+      multiqc . --filename "multiqc_report_${sample_name}.html"
       """
     }
 }
@@ -827,11 +827,11 @@ if (params.multiqc_postalignment_by_sample) {
      set val(sample_name), file("*") from ch_postalignment_multiqc_files_by_sample
 
      output:
-     file("multiqc_report.html")
+     file("multiqc_report_${sample_name}.html")
 
      script:
      """
-     multiqc .
+     multiqc . --filename "multiqc_report_${sample_name}.html"
      """
    }
 }
