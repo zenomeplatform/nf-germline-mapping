@@ -59,10 +59,10 @@ PR centric changelog with description of notable changes implemented in a PR.
 
 ## v0.2 - 29/02/2021 - MultiQC changes, metadata from file name
   Added:
-    - Metadata retrieval from fq file names in the input channel (bio-type, seq-type, seq-machine, flowcell-ID, lane, barcode). This is optional and can be switched off by using --metadata_from_file_name false *true by default)
-    - Check for correct metadata naming format for fq file (if --metadata_from_file_name is true, as it is by default)
-    - Check for matching smaple_id specified in csv file and in fq file name (can be turned off by --double_check_sample_id false, true buy default)
-    - Process multiqc_prealignment_report_by_sample to create smaller realignment multiqc reports for each batch of files that corresponds to same sample_id.
+  - Metadata retrieval from fq file names in the input channel (bio-type, seq-type, seq-machine, flowcell-ID, lane, barcode). This is optional and can be switched off by using --metadata_from_file_name false *true by default)
+  - Check for correct metadata naming format for fq file (if --metadata_from_file_name is true, as it is by default)
+  - Check for matching smaple_id specified in csv file and in fq file name (can be turned off by --double_check_sample_id false, true buy default)
+  - Process multiqc_prealignment_report_by_sample to create smaller realignment multiqc reports for each batch of files that corresponds to same sample_id.
 
   Fixed:
     - Multiqc not showing fastqc report for trimmed reads (reason - "_trimmed" substrings are automatically removed from file names by multiqc before plotting, so the trimmed pair overwrote the untrimmed pair and showed up as untrimmed pair in the report)
@@ -74,14 +74,14 @@ PR centric changelog with description of notable changes implemented in a PR.
 
 ## v0.1 - 29/02/2021 - Adds first pipeline template and 4 steps
   Added:
-    - the basic piplene infrastrucure with multiple auxiliary elements;
-    - reading input from input csv file with sample name and paths to fastq files;
-    - first 4 pipeline steps:
-        1. initial fastqc on raw data,
-        2. read quality filtering and trimming with flexbar,
-        3. secondary fastqc,
-        4. collective multiqc;
-    - test profiles:
-        1. with public tiny s3 data,
-        2. with private tiny s3 data;
-    - two ci tests for the above.
+  - the basic piplene infrastrucure with multiple auxiliary elements;
+  - reading input from input csv file with sample name and paths to fastq files;
+  - first 4 pipeline steps:
+      1. initial fastqc on raw data,
+      2. read quality filtering and trimming with flexbar,
+      3. secondary fastqc,
+      4. collective multiqc;
+  - test profiles:
+      1. with public tiny s3 data,
+      2. with private tiny s3 data;
+  - two ci tests for the above.
