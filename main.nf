@@ -110,7 +110,8 @@ if (params.fasta) summary['Reference genome index'] = params.fasta_fai
 if (params.fasta) summary['Reference genome dict'] = params.fasta_dict
 if (params.bwa) summary['BWA index'] = params.bwa
 if (params.adapters) summary['Adapters'] = params.adapters
-if (params.regions) summary['Target regions'] = params.regions
+if (params.target_regions) summary['Target regions'] = params.target_regions
+if (params.bait_regions) summary['Bait regions'] = params.bait_regions
 summary['Known sites']       = known_sites
 summary['Known sites index'] = known_sites_index
 if ( known_sites_2 ) {
@@ -121,6 +122,7 @@ if ( known_sites_3 ) {
   summary['Known sites 3']   = known_sites_3
   summary['Known sites 3 index'] = known_sites_3_index
 }
+if (params.bqsr_static_quantized_quals) summary['BQSR static quantized quals'] = params.bqsr_static_quantized_quals
 if (params.cleanup) summary['Cleanup'] = "Cleanup is turned on"
 
 log.info summary.collect { k,v -> "${k.padRight(20)}: $v" }.join("\n")
@@ -161,6 +163,10 @@ if (!known_sites) {
 if (known_sites_2 && !known_sites_2_index) {to_exit=true; log.error "Missing index file for genomic variants file \"${known_sites_2}\". It is a required input for GATK base recalibration step. \nPlease provide the index with parameter --known_variants_2_index."}
 if (known_sites_3 && !known_sites_3_index) {to_exit=true; log.error "Missing index file for genomic variants file \"${known_sites_3}\". It is a required input for GATK base recalibration step. \nPlease provide the index with parameter --known_variants_3_index."}
 
+if (params.target_regions && !params.bait_regions) {
+    log.warn "Provided target regions but not bait regions. Provided regions file will be used both as target and bait regions for qc_collect_hs_metrics. Alternatively provide bait regions file with --bait_regions parameter."
+}
+if (!params.target_regions && params.bait_regions) {to_exit=true; log.error "Specified bait regions file \"${params.bait_regions}\" but not target regions file for targeted exome sequencing project. Both files are required for picard qc \"collect_hs_metrics\" step. \nPlease provide the target regions interval_list file with --target_regions parameter."}
 
 if (to_exit) exit 1, "One or more inputs are missing. Aborting."
 
@@ -250,7 +256,15 @@ if (known_sites_3) {
   ch_known_sites_3_index = "null"
 }
 
-ch_regions = params.regions ? Channel.value(file(params.regions)) : "null"
+
+ch_target_regions = params.target_regions ? Channel.value(file(params.target_regions)) : "null"
+if (params.target_regions && params.bait_regions) {
+  ch_bait_regions = Channel.value(file(params.bait_regions))
+} else if (params.target_regions && !params.bait_regions) {
+  ch_bait_regions = Channel.value(file(params.target_regions))
+} else {
+  ch_bait_regions = "null"
+}
 
 
 /*
@@ -394,11 +408,11 @@ if (params.multiqc_prealignment_by_sample) {
       set val(sample_name), file(fastqc_raw_dir), file(trimming_log), file(fastqc_trimmed_dir) from ch_prealignment_multiqc_files_by_sample
 
       output:
-      file("multiqc_report.html")
+      file("multiqc_report_${sample_name}.html")
 
       script:
       """
-      multiqc .
+      multiqc . --filename "multiqc_report_${sample_name}.html"
       """
     }
 }
@@ -466,7 +480,7 @@ process map_reads {
 }
 
 
-ch_mapped_reads_grouped_by_sample = ch_mapped_reads.groupTuple(by: 0).view()
+ch_mapped_reads_grouped_by_sample = ch_mapped_reads.groupTuple(by: 0)
 
 
 process merge_bams_by_sample {
@@ -573,7 +587,7 @@ process calculate_BQSR  {
     each file(known_sites_2_index) from ch_known_sites_2_index
     each file(known_sites_3) from ch_known_sites_3
     each file(known_sites_3_index) from ch_known_sites_3_index
-    each file(regions) from ch_regions
+    each file(target_regions) from ch_target_regions
 
     output:
     set val(sample_name), file(bam), file(bam_index), file("${sample_name}.sorted_mrkdup_bqsr.table") into ch_mapped_reads_with_BQSR
@@ -581,7 +595,7 @@ process calculate_BQSR  {
     script:
     optional_known_sites_2_arg = params.known_sites_2 ? "--known-sites ${known_sites_2}" : ""
     optional_known_sites_3_arg = params.known_sites_3 ? "--known-sites ${known_sites_3}" : ""
-    optional_regions_file      = params.regions ? "-L ${regions}" : ""
+    optional_target_regions_file      = params.target_regions ? "-L ${target_regions}" : ""
     """
     gatk BaseRecalibrator \
         -R ${fasta} \
@@ -592,8 +606,253 @@ process calculate_BQSR  {
         ${optional_known_sites_3_arg} \
         --preserve-qscores-less-than ${params.bqsr_preserve_qscores_less_than} \
         --disable-bam-index-caching \
-        ${optional_regions_file}
+        ${optional_target_regions_file}
     """
+}
+
+
+process apply_BQSR  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam), file(bam_index), file(bqsr_table) from ch_mapped_reads_with_BQSR
+    file(fasta) from ch_refgenome
+    file(fasta_fai) from ch_refgenome_index
+    file(fasta_dict) from ch_refgenome_dict
+
+    output:
+    set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr.bam"), file("${sample_name}.sorted_mrkdup_bqsr.bai") into ch_recalibrated_mapped_reads
+
+    script:
+    arg_static_quantized_quals = ""
+    if (params.bqsr_static_quantized_quals) {
+      static_quantized_quals_array = params.bqsr_static_quantized_quals.toString().split(',')
+      for(qual in static_quantized_quals_array) {
+         arg_static_quantized_quals += "--static-quantized-quals ${qual} "
+      }
+    }
+    """
+    gatk ApplyBQSR \
+        -R ${fasta} \
+        -I ${bam} \
+        -O ${sample_name}.sorted_mrkdup_bqsr.bam \
+        --bqsr-recal-file ${bqsr_table} \
+        --preserve-qscores-less-than ${params.bqsr_preserve_qscores_less_than} \
+        ${arg_static_quantized_quals}
+
+    picard BuildBamIndex \
+        I=${sample_name}.sorted_mrkdup_bqsr.bam
+    """
+}
+
+ch_recalibrated_mapped_reads.into{
+  ch_recalibrated_mapped_reads_for_samtools_flagstat;
+  ch_recalibrated_mapped_reads_for_insert_size_qc;
+  ch_recalibrated_mapped_reads_for_alignment_summary;
+  ch_recalibrated_mapped_reads_for_sequencing_artifact;
+  ch_recalibrated_mapped_reads_for_collect_hs_metrics;
+  ch_recalibrated_mapped_reads_for_fastqc_mapped;
+}
+
+
+process qc_samtools_flagstat  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/post_align_qc/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam), file(bai) from ch_recalibrated_mapped_reads_for_samtools_flagstat
+
+    output:
+    set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_flagstat.txt") into ch_samtools_flagstat
+
+    script:
+    """
+    samtools flagstat ${bam} > "${sample_name}.sorted_mrkdup_bqsr_flagstat.txt"
+    """
+}
+
+
+process qc_insert_size  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/post_align_qc/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam), file(bai) from ch_recalibrated_mapped_reads_for_insert_size_qc
+
+    output:
+    set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.txt") into ch_insert_size_qc
+    file("${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.pdf") into ch_insert_size_qc_pdf
+    script:
+    """
+    picard CollectInsertSizeMetrics \
+        I=${bam} \
+        O=${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.txt \
+        H=${sample_name}.sorted_mrkdup_bqsr_insert_size_metrics.pdf
+    """
+}
+
+
+process qc_alignment_summary  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/post_align_qc/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam), file(bai) from ch_recalibrated_mapped_reads_for_alignment_summary
+    file(fasta) from ch_refgenome
+    file(fasta_fai) from ch_refgenome_index
+    file(fasta_dict) from ch_refgenome_dict
+
+    output:
+    set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_alignment_metrics.txt") into ch_alignment_summary_qc
+
+    script:
+    """
+    picard CollectAlignmentSummaryMetrics \
+        I=${bam} \
+        O=${sample_name}.sorted_mrkdup_bqsr_alignment_metrics.txt \
+        R=${fasta}
+    """
+}
+
+
+process qc_sequencing_artifact  {
+    tag "$sample_name"
+    label 'low_memory'
+    publishDir "${params.outdir}/${sample_name}/post_align_qc/", mode: 'copy'
+
+    input:
+    set val(sample_name), file(bam), file(bai) from ch_recalibrated_mapped_reads_for_sequencing_artifact
+    file(fasta) from ch_refgenome
+    file(fasta_fai) from ch_refgenome_index
+    file(fasta_dict) from ch_refgenome_dict
+
+    output:
+    set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_artifact_metrics.txt.*") into ch_sequencing_artifact_qc
+
+    script:
+    """
+    picard CollectSequencingArtifactMetrics \
+        I=${bam} \
+        O=${sample_name}.sorted_mrkdup_bqsr_artifact_metrics.txt \
+        R=${fasta}
+    """
+}
+
+if (params.target_regions)  {
+
+  process qc_collect_hs_metrics {
+      tag "$sample_name"
+      label 'low_memory'
+      publishDir "${params.outdir}/${sample_name}/post_align_qc/", mode: 'copy'
+
+      input:
+      set val(sample_name), file(bam), file(bai) from ch_recalibrated_mapped_reads_for_collect_hs_metrics
+      file(fasta) from ch_refgenome
+      file(fasta_fai) from ch_refgenome_index
+      file(fasta_dict) from ch_refgenome_dict
+      each file(target_regions) from ch_target_regions
+      each file("bait_regions_file") from ch_bait_regions
+
+      output:
+      set val(sample_name), file("${sample_name}.sorted_mrkdup_bqsr_hs_metrics.txt") into ch_collect_hs_metrics_qc
+
+      script:
+      """
+      picard CollectHsMetrics \
+          I=${bam} \
+          O=${sample_name}.sorted_mrkdup_bqsr_hs_metrics.txt \
+          R=${fasta} \
+          BI="bait_regions_file" \
+          TI=${target_regions}
+      """
+  }
+
+} else {
+  ch_collect_hs_metrics_qc = Channel.empty()
+}
+
+
+process fastqc_mapped {
+      tag "$sample_name"
+      label 'low_memory'
+      publishDir "${params.outdir}/${sample_name}/post_align_qc/", mode: 'copy'
+
+      input:
+      set val(sample_name), file(bam), file(bai) from ch_recalibrated_mapped_reads_for_fastqc_mapped
+
+      output:
+      set val(sample_name), file("${bam.baseName}_fastqc.*") into ch_fastqc_mapped
+
+      script:
+      """
+      fastqc -t ${task.threads} ${bam}
+      """
+  }
+
+
+ch_postalignment_multiqc_files =
+ ch_samtools_flagstat.mix(
+   ch_alignment_summary_qc,
+   ch_sequencing_artifact_qc,
+   ch_fastqc_mapped,
+   ch_insert_size_qc
+ )
+
+
+if (params.target_regions)  {
+ch_postalignment_multiqc_files =
+  ch_postalignment_multiqc_files
+    .mix(ch_collect_hs_metrics_qc)
+}
+
+ ch_postalignment_multiqc_files
+     .groupTuple()
+     .map { sample_name, files -> [sample_name, files.flatten()]}
+     .into { ch_postalignment_multiqc_files_by_sample; ch_postalignment_multiqc_files_all }
+
+
+
+if (params.multiqc_postalignment_by_sample) {
+ process multiqc_postalignment_report_by_sample {
+     tag "$sample_name"
+     label 'low_memory'
+     publishDir "${params.outdir}/multiqc_postalignment_report/${sample_name}/", mode: 'copy'
+
+     input:
+     set val(sample_name), file("*") from ch_postalignment_multiqc_files_by_sample
+
+     output:
+     file("multiqc_report_${sample_name}.html")
+
+     script:
+     """
+     multiqc . --filename "multiqc_report_${sample_name}.html"
+     """
+   }
+}
+
+
+if (params.multiqc_postalignment_all) {
+  process multiqc_postalignment_report_all {
+      label 'low_memory'
+      publishDir "${params.outdir}/multiqc_postalignment_report/", mode: 'copy'
+
+      input:
+      file("*") from ch_postalignment_multiqc_files_all.flatten().collect()
+
+      output:
+      file("multiqc_report.html")
+
+      script:
+      """
+      multiqc .
+      """
+    }
 }
 
 

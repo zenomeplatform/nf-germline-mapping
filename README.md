@@ -74,7 +74,7 @@ By default the pipeline relies on obtaining certain metadata information directl
 To provide that kind of information fastq file names must follow the naming convention:
 ```
 {sampleID}-{bio-type}-{seq-type}-{seq-machine}-{flowcell-ID}-{lane}-{barcode}-{read-direction}.fq[.gz]
-``` 
+```
 Where individual items are separated by single dashes `-` (can be changed with `--sample_name_format_delimeter` parameter)
 
 Example:
@@ -92,6 +92,29 @@ Possible values:
 `SOR` - somatic RNA
 `CFD` - cell free DNA
 `SCD` - single cell DNA
+
+## Optional inputs
+
+### Genome reference data
+
+By default pipeline uses reference data from igenomes s3 bucket for pre-defined genomes hg37 and hg38 (GRCh38). Genome hg38 is used by default, but that can be changed with `--genome` parameter.
+
+Alternatively, user may provide his own reference data bundle with corresponding arguments. Note that full list of reference data will have to be provided in this case (http and s3 links are also accepted). Check the `conf/igenomes.config` file to see which files are already in use and which reference data files are needed for the pipeline in general.
+
+### Targeted sequencing regions files (exome sequening)
+For targeted sequencing projects such as exome sequencing it is required to provide target and bait regions files, which should be in gatk interval_list format. The pipeline already comes with prepared SureSelect V6 S07604514 and V7 S31285117 files converted to iterval_list format for both hg37 and hg38. You can find these files and instructions how they were obtained in `assets/regions_files` folder.
+
+Pipeline requires at least one targeted sequencing regions file:
+```
+--target_regions SS_V7_hg19_regions.bed.interval_list
+```
+
+If available, also the "probes" bait regions file should be provided:
+```
+--bait_regions SS_V7_hg19_probes.bed.interval_list
+```
+If only target regions file is provided, it will be used both as target and bait file in target seqencing specificity QC step. However this is less accurate then if providing both files.
+
 
 ## Test profiles
 
