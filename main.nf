@@ -209,6 +209,7 @@ Channel
       }
 
       if (!params.metadata_from_file_name) {
+          sample_full_name = sample_name
           bio_type    = "not_provided"
           seq_type    = "not_provided"
           seq_machine = "IL"
