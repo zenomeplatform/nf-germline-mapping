@@ -33,6 +33,10 @@ def helpMessage() {
                                 (default: $params.max_memory)
     --max_time                  Maximum time per task (time unit)
                                 (default: $params.max_time)
+    --cpus_mapping              Number of cores used by mapping processes (int)
+                                (default: $params.cpus_mapping)
+    --memory_mapping            Memory size allocated to mapping processes (memory unit)
+                                (default: $params.memory_mapping)
 
     See here for more info: https://github.com/zenomeplatform/nf-germline-snv
     """.stripIndent()
@@ -74,7 +78,7 @@ def check_max(obj, type) {
     }
   } else if (type == 'cpus') {
     try {
-      return Math.min( obj, params.max_cpus as int )
+      return Math.min( obj as int, params.max_cpus as int )
     } catch (all) {
       println "   ### ERROR ###   Max cpus '${params.max_cpus}' is not valid! Using default value: $obj"
       return obj
