@@ -115,6 +115,35 @@ If available, also the "probes" bait regions file should be provided:
 ```
 If only target regions file is provided, it will be used both as target and bait file in target seqencing specificity QC step. However this is less accurate then if providing both files.
 
+### Pipeline resource configuration
+#### `--max_cpus`
+Upper limit of CPUs per process, to limit the maximal number of cpus that can be allocated to each process. By default is set to total number of cpus on the machine where pipeline is started, therefor deafault limit of cpus per process is total number of cpus available on the machine.
+
+Note: pipeline will still try to use all available computation resources, its just that each process will get an individual limit defined by `--max_cpus`. The processes that may get affected by this parameter are the mapping processes (by default use 4 cpus, defined by `--cpus_mapping` parameter, see below) and bam merging processes (are always equal to `max_cpus`). 
+
+Note 2: `--max_cpus` has priority over the `--cpus_mapping` parameter.
+
+#### `--max_memory`
+Same as max CPUs, but for RAM. Default: `16.GB`. Should be defined in nextflow memory type format, e.g. `8.GB` or `500.MB` (see [here](https://www.nextflow.io/docs/latest/process.html#memory))
+
+#### `--max_time`
+Maximum execution time allowed for single process. Once any process reaches this time limit, it will get aborted.
+
+Default: `24.h`
+
+
+#### `--cpus_mapping`
+Parameter to define a custom number of cores used by mapping processes.
+
+Default: `4`
+
+#### `--memory_mapping`
+Parameter to define a custom memory size allocated to mapping processes.
+
+Default: `8.GB`
+
+
+
 
 ## Test profiles
 

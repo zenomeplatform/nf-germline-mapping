@@ -33,6 +33,10 @@ def helpMessage() {
                                 (default: $params.max_memory)
     --max_time                  Maximum time per task (time unit)
                                 (default: $params.max_time)
+    --cpus_mapping              Number of cores used by mapping processes (int)
+                                (default: $params.cpus_mapping)
+    --memory_mapping            Memory size allocated to mapping processes (memory unit)
+                                (default: $params.memory_mapping)
 
     See here for more info: https://github.com/zenomeplatform/nf-germline-snv
     """.stripIndent()
@@ -74,7 +78,7 @@ def check_max(obj, type) {
     }
   } else if (type == 'cpus') {
     try {
-      return Math.min( obj, params.max_cpus as int )
+      return Math.min( obj as int, params.max_cpus as int )
     } catch (all) {
       println "   ### ERROR ###   Max cpus '${params.max_cpus}' is not valid! Using default value: $obj"
       return obj
@@ -195,6 +199,7 @@ Channel
             }
           }
 
+          sample_full_name = file(fastq_path_1).simpleName.minus("-F").minus("-R")
           bio_type    = sample_name_parsed[1]
           seq_type    = sample_name_parsed[2]
           seq_machine = sample_name_parsed[3]
@@ -204,6 +209,7 @@ Channel
       }
 
       if (!params.metadata_from_file_name) {
+          sample_full_name = sample_name
           bio_type    = "not_provided"
           seq_type    = "not_provided"
           seq_machine = "IL"
@@ -214,7 +220,7 @@ Channel
 
       read_group_LB = LB
 
-      [ sample_name, file(fastq_path_1), file(fastq_path_2), bio_type, seq_type, seq_machine, flowcell_id, lane, barcode, read_group_LB ]
+      [ sample_name, sample_full_name, file(fastq_path_1), file(fastq_path_2), bio_type, seq_type, seq_machine, flowcell_id, lane, barcode, read_group_LB ]
     }
     .set { ch_input_fastq }
 
@@ -272,12 +278,13 @@ if (params.target_regions && params.bait_regions) {
  */
 
 process fastqc_raw {
-    tag "$sample_name"
+    tag "$sample_full_name"
     label 'low_memory'
     publishDir "${params.outdir}/fastqc/raw/", mode: 'copy'
 
     input:
     set val(sample_name),
+        val(sample_full_name),
         file(fastq_1),
         file(fastq_2),
         val(bio_type),
@@ -289,14 +296,14 @@ process fastqc_raw {
         val(read_group_LB) from ch_input_fastq_for_qc
 
     output:
-    set val(sample_name), file("fastqc_${sample_name}_raw_logs") into ch_fastq_qc_raw
+    set val(sample_full_name), file("fastqc_${sample_full_name}_raw_logs") into ch_fastq_qc_raw
 
 
     script:
     """
-    mkdir fastqc_${sample_name}_raw_logs
+    mkdir fastqc_${sample_full_name}_raw_logs
 
-    fastqc --outdir fastqc_${sample_name}_raw_logs \
+    fastqc --outdir fastqc_${sample_full_name}_raw_logs \
         --format fastq \
         --quiet \
         --threads ${task.cpus} \
@@ -306,12 +313,13 @@ process fastqc_raw {
 
 
 process trim_fastqc {
-    tag "$sample_name"
+    tag "$sample_full_name"
     label 'low_memory'
     publishDir "${params.outdir}/trimmed_reads/", mode: 'copy'
 
     input:
     set val(sample_name),
+        val(sample_full_name),
         file(fastq_1),
         file(fastq_2),
         val(bio_type),
@@ -325,6 +333,7 @@ process trim_fastqc {
 
     output:
     set val(sample_name),
+        val(sample_full_name),
         file("${fastq_1.simpleName}_trim.fastq.gz"),
         file("${fastq_2.simpleName}_trim.fastq.gz"),
         val(bio_type),
@@ -334,7 +343,7 @@ process trim_fastqc {
         val(lane),
         val(barcode),
         val(read_group_LB) into (ch_fastq_trimmed_to_map, ch_fastq_trimmed_for_qc)
-    set val(sample_name), file("flexbar_${sample_name}.log") into ch_trimming_report
+    set val(sample_full_name), file("flexbar_${sample_full_name}.log") into ch_trimming_report
 
     script:
     // adapters were not provide so for now are optional
@@ -351,7 +360,7 @@ process trim_fastqc {
         --reads2 ${fastq_2} \
         --output-reads ${fastq_1.simpleName}_trim.fastq \
         --output-reads2 ${fastq_2.simpleName}_trim.fastq \
-        --output-log flexbar_${sample_name}.log \
+        --output-log flexbar_${sample_full_name}.log \
         $adapters_param
 
         # no .gz in the end of output files is important, its added automatically by flexbar because of --zip-output GZ option.
@@ -360,12 +369,13 @@ process trim_fastqc {
 
 
 process fastqc_trimmed {
-    tag "$sample_name"
+    tag "$sample_full_name"
     label 'low_memory'
     publishDir "${params.outdir}/fastqc/trimmed/", mode: 'copy'
 
     input:
     set val(sample_name),
+        val(sample_full_name),
         file(fastq_1),
         file(fastq_2),
         val(bio_type),
@@ -377,13 +387,13 @@ process fastqc_trimmed {
         val(read_group_LB) from ch_fastq_trimmed_for_qc
 
     output:
-    set val(sample_name), file("fastqc_${sample_name}_trimmed_logs") into ch_fastq_qc_trimmed
+    set val(sample_full_name), file("fastqc_${sample_full_name}_trimmed_logs") into ch_fastq_qc_trimmed
 
     script:
     """
-    mkdir fastqc_${sample_name}_trimmed_logs
+    mkdir fastqc_${sample_full_name}_trimmed_logs
 
-    fastqc --outdir fastqc_${sample_name}_trimmed_logs \
+    fastqc --outdir fastqc_${sample_full_name}_trimmed_logs \
         --format fastq \
         --quiet \
         --threads ${task.cpus} \
@@ -400,19 +410,19 @@ ch_fastq_qc_raw
 
 if (params.multiqc_prealignment_by_sample) {
   process multiqc_prealignment_report_by_sample {
-      tag "$sample_name"
+      tag "$sample_full_name"
       label 'low_memory'
-      publishDir "${params.outdir}/multiqc_prealignment_report/${sample_name}/", mode: 'copy'
+      publishDir "${params.outdir}/multiqc_prealignment_report/${sample_full_name}/", mode: 'copy'
 
       input:
-      set val(sample_name), file(fastqc_raw_dir), file(trimming_log), file(fastqc_trimmed_dir) from ch_prealignment_multiqc_files_by_sample
+      set val(sample_full_name), file(fastqc_raw_dir), file(trimming_log), file(fastqc_trimmed_dir) from ch_prealignment_multiqc_files_by_sample
 
       output:
-      file("multiqc_report_${sample_name}.html")
+      file("multiqc_report_${sample_full_name}.html")
 
       script:
       """
-      multiqc . --filename "multiqc_report_${sample_name}.html"
+      multiqc . --filename "multiqc_report_${sample_full_name}.html"
       """
     }
 }
@@ -438,12 +448,13 @@ if (params.multiqc_prealignment_all) {
 
 
 process map_reads {
-    tag "$sample_name"
+    tag "$sample_full_name"
     label 'low_memory'
     publishDir "${params.outdir}/${sample_name}/align/", mode: 'copy'
 
     input:
     set val(sample_name),
+        val(sample_full_name),
         file(fastq_1),
         file(fastq_2),
         val(bio_type),

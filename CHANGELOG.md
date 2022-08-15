@@ -2,6 +2,19 @@
 
 PR centric changelog with description of notable changes implemented in a PR.
 
+## v0.6 - 24/12/2021 - Fixes and optimisation
+### Fixed:
+  - Issue when was more that one pair of fq files per sample_id (prealignment multiqc crashed because of receiving several files with the same names, cause same sample_id)
+### Added:
+  - More optimal resource allocation for many processes, guided by full-data run and process monitoring
+  - New parameters `--cpus_mapping` and `--memory_mapping` to define custom resources to mapping processes.
+  - Two test configs to run tests on data where there is more than one pair of fq files per sample_id.
+### Changes:
+  - Processes now automatically restart with more RAM if they failed due to "out of RAM" errors
+  - Automatic detection of `--max_cpus` - makes it equal to machine cpus (by default)
+  - Trace file now has many more columns with useful process metrics
+
+
 ## v0.5 - 22/12/2021 - Adds post-alignment QC steps
 ### Added:
   - Process `apply_BQSR`
